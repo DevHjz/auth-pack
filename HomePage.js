@@ -44,7 +44,7 @@ const REFRESH_INTERVAL = 60000;
 const OFFSET_X = width * 0.45;
 const OFFSET_Y = height * 0.2;
 
-export default function HomePage() {
+function HomePage() {
   const [isPlusButton, setIsPlusButton] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
   const [showEnterAccountModal, setShowEnterAccountModal] = useState(false);
@@ -57,7 +57,8 @@ export default function HomePage() {
   const [refreshing, setRefreshing] = useState(false);
   const {isConnected} = useNetInfo();
   const [canSync, setCanSync] = useState(false);
-  const [key, setKey] = useState(0);
+  // 新增：用 accountsVersion 替代原 key 状态，仅追踪账号数据变化
+  const [accountsVersion, setAccountsVersion] = useState(0);
   const swipeableRef = useRef(null);
   const {userInfo, serverUrl, token} = useStore();
   const {startSync} = useAccountSync();
@@ -79,12 +80,15 @@ export default function HomePage() {
   });
   const navigation = useNavigation();
 
+
   useEffect(() => {
     setCanSync(Boolean(isConnected && userInfo && serverUrl));
   }, [isConnected, userInfo, serverUrl]);
 
+  // 优化：仅在 accounts 变化时更新过滤数据和版本号（触发列表重渲染）
   useEffect(() => {
     setFilteredData(accounts);
+    setAccountsVersion(prev => prev + 1);
   }, [accounts]);
 
   useEffect(() => {
@@ -133,6 +137,7 @@ export default function HomePage() {
       closeEnterAccountModal();
     }
   };
+
 
   const handleEditAccount = (account) => {
     closeSwipeableMenu();
@@ -198,6 +203,7 @@ export default function HomePage() {
 
   const closeEnterAccountModal = () => setShowEnterAccountModal(false);
 
+
   const closeSwipeableMenu = () => {
     if (swipeableRef.current) {
       swipeableRef.current.close();
@@ -251,6 +257,7 @@ export default function HomePage() {
             onDelete(account);
           }}
         >
+
           <MaterialCommunityIcons name="trash-can" size={24} color="#FFF" />
           <Text style={{marginTop: 4, color: "#FFF"}}>
             {t("common.delete")}
@@ -301,6 +308,7 @@ export default function HomePage() {
                 <Text variant="titleMedium" numberOfLines={1}>
                   {item.accountName}
                 </Text>
+
                 <Text variant="titleLarge" style={{fontWeight: "bold"}}>{token}</Text>
               </View>
             }
@@ -318,7 +326,7 @@ export default function HomePage() {
             right={() => (
               <View style={{justifyContent: "center", alignItems: "center"}}>
                 <CountdownCircleTimer
-                  key={key}
+                  // 移除：key={key} 避免倒计时触发重渲染
                   isPlaying={true}
                   duration={30}
                   initialRemainingTime={timeRemaining}
@@ -326,7 +334,7 @@ export default function HomePage() {
                   colorsTime={[30, 24, 18, 12, 6, 0]}
                   size={60}
                   onComplete={() => {
-                    setKey(prevKey => prevKey + 1);
+                    // 移除：setKey(prevKey => prevKey + 1); 避免倒计时触发列表重渲染
                     return {
                       shouldRepeat: true,
                       delay: 0,
@@ -335,6 +343,7 @@ export default function HomePage() {
                   }}
                   strokeWidth={5}
                 >
+
                   {({remainingTime}) => (
                     <Text style={{fontSize: 18, fontWeight: "bold"}}>{remainingTime}s</Text>
                   )}
@@ -354,7 +363,7 @@ export default function HomePage() {
       <FlashList
         data={searchQuery.trim() !== "" ? filteredData : accounts}
         keyExtractor={(item) => `${item.id}`}
-        extraData={key}
+        extraData={accountsVersion} // 关键：仅在账号数据变化时更新
         estimatedItemSize={80}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -381,96 +390,89 @@ export default function HomePage() {
             transform: [{translateX: -150}, {translateY: -112.5}],
           }}
         >
+
           <TouchableOpacity
-            style={{flexDirection: "row", alignItems: "center"}}
+            style={{
+              height: 60,
+              alignItems: "center",
+              justifyContent: "center",
+              borderBottomWidth: 1,
+              borderBottomColor: "#eee",
+            }}
             onPress={handleScanPress}
           >
-            <IconButton icon={"camera"} size={35} />
-            <View style={{width: 180}}>
-              <Text style={{fontSize: 18}}>{t("homepage.Scan QR Code")}</Text>
-            </View>
+            <MaterialCommunityIcons name="qrcode-scan" size={28} color="#8A7DF7" />
+            <Text style={{marginTop: 4, fontSize: 16}}>{t("homepage.Scan QR code")}</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={{flexDirection: "row", alignItems: "center", marginTop: 10}}
+            style={{
+              height: 60,
+              alignItems: "center",
+              justifyContent: "center",
+              borderBottomWidth: 1,
+              borderBottomColor: "#eee",
+            }}
             onPress={openEnterAccountModal}
           >
-            <IconButton icon={"keyboard"} size={35} />
-            <View style={{width: 180}}>
-              <Text style={{fontSize: 18}}>{t("homepage.Enter Secret Code")}</Text>
-            </View>
+            <MaterialCommunityIcons name="plus-circle" size={28} color="#8A7DF7" />
+            <Text style={{marginTop: 4, fontSize: 16}}>{t("homepage.Enter manually")}</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={{flexDirection: "row", alignItems: "center", marginTop: 10}}
+            style={{
+              height: 60,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
             onPress={openImportAccountModal}
           >
-            <IconButton icon={"import"} size={35} />
-            <View style={{width: 180}}>
-              <Text style={{fontSize: 18}}>{t("homepage.Import from other app")}</Text>
-            </View>
+            <MaterialCommunityIcons name="import" size={28} color="#8A7DF7" />
+            <Text style={{marginTop: 4, fontSize: 16}}>{t("homepage.Import accounts")}</Text>
           </TouchableOpacity>
         </Modal>
       </Portal>
 
-      <Portal>
-        <Modal
-          visible={showEnterAccountModal}
-          onDismiss={closeEnterAccountModal}
-          contentContainerStyle={{
-            backgroundColor: "white",
-            padding: 1,
-            borderRadius: 10,
-            width: "90%",
-            height: "40%",
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: [{translateX: -OFFSET_X}, {translateY: -OFFSET_Y}],
-          }}
-        >
-          <EnterAccountDetails onClose={closeEnterAccountModal} onAdd={handleAddAccount} validateSecret={validateSecret} />
-        </Modal>
-      </Portal>
-
-      <Portal>
-        <Modal
-          visible={showEditAccountModal}
-          onDismiss={closeEditAccountModal}
-          contentContainerStyle={{
-            backgroundColor: "white",
-            padding: 1,
-            borderRadius: 10,
-            width: "90%",
-            height: "30%",
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: [{translateX: -OFFSET_X}, {translateY: -OFFSET_Y}],
-          }}
-        >
-          <EditAccountDetails onClose={closeEditAccountModal} onEdit={onAccountEdit} placeholder={placeholder} />
-        </Modal>
-      </Portal>
-
-      {showScanner && (
-        <ScanQRCode onClose={handleCloseScanner} showScanner={showScanner} onAdd={handleAddAccount} onError={handleScanError} />
-      )}
-
-      <TouchableOpacity
-        style={{
-          position: "absolute",
-          bottom: 30,
-          right: 30,
-          width: 70,
-          height: 70,
-          borderRadius: 35,
-          backgroundColor: "#E6DFF3",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+      <FAB
+        icon={isPlusButton ? "plus" : "close"}
+        style={styles.fab}
         onPress={togglePlusButton}
-      >
-        <IconButton icon={isPlusButton ? "plus" : "close"} size={40} color={"white"} />
-      </TouchableOpacity>
+      />
+
+      <Modal visible={showScanner} animationType="slide">
+        <Scanner
+          onDetected={handleAddAccount}
+          onError={handleScanError}
+          onClose={handleCloseScanner}
+        />
+      </Modal>
+
+      <Modal visible={showEnterAccountModal} animationType="slide">
+        <EnterAccountDetails
+          onClose={closeEnterAccountModal}
+          onAdd={handleAddAccount}
+        />
+      </Modal>
+
+      <Modal visible={showEditAccountModal} animationType="slide">
+        <EditAccountDetails
+          onClose={closeEditAccountModal}
+          onEdit={onAccountEdit}
+          placeholder={placeholder}
+        />
+      </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  fab: {
+    position: "absolute",
+    margin: 16,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#8A7DF7",
+  },
+});
+
+export default HomePage;
