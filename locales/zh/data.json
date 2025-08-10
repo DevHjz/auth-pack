@@ -93,7 +93,9 @@
   },
   "syncLogic": {
     "Sync failed": "同步失败",
-    "Access token has expired, please login again": "访问令牌已过期，请重新登录"
+    "Access token has expired, please login again": "访问令牌已过期，请重新登录",
+    "Sync success": "同步成功",
+    "All your accounts are up to date.": "您的所有账户均已更新至最新状态"
   },
   "itemDetail": {
     "token": "令牌",

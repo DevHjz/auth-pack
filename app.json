@@ -29,7 +29,7 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.devhjz.sso",
+      "package": "com.DevHjz.sso",
       "versionCode": 520012200
     },
     "web": {

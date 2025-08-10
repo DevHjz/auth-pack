@@ -40,7 +40,7 @@ import {useTokenRefresh, validateSecret} from "./totpUtil";
 import {useAccountSync, useAccounts, useEditAccount} from "./useAccountStore";
 
 const {width, height} = Dimensions.get("window");
-const REFRESH_INTERVAL = 10000;
+const REFRESH_INTERVAL = 60000;
 const OFFSET_X = width * 0.45;
 const OFFSET_Y = height * 0.2;
 
