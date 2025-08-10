@@ -19,6 +19,25 @@ import * as api from "./api";
 import {generateToken} from "./totpUtil";
 import useStore from "./useStorage";
 
+// 辅助函数：生成账户数据的唯一标识字符串，用于比较
+function getAccountFingerprint(account) {
+  return JSON.stringify({
+    accountName: account.accountName,
+    issuer: account.issuer,
+    secretKey: account.secretKey,
+    origin: account.origin,
+    deletedAt: account.deletedAt
+  });
+}
+
+// 辅助函数：比较两组账户是否相同
+function areAccountsEqual(prevAccounts, newAccounts) {
+  if (prevAccounts.length !== newAccounts.length) return false;
+  
+  const prevFingerprints = new Set(prevAccounts.map(getAccountFingerprint));
+  return newAccounts.every(acc => prevFingerprints.has(getAccountFingerprint(acc)));
+}
+
 function handleTokenExpiration() {
   const {clearAll} = useStore.getState();
   clearAll();
@@ -143,6 +162,8 @@ function mergeAccounts(localAccounts, serverAccounts, serverTimestamp) {
 
 export async function syncWithCloud(db, userInfo, serverUrl, token) {
   const localAccounts = await getLocalAccounts(db);
+  // 保存同步前的账户快照用于比较
+  const preSyncAccounts = [...localAccounts];
 
   try {
     await api.validateToken(serverUrl, token);
@@ -160,6 +181,14 @@ export async function syncWithCloud(db, userInfo, serverUrl, token) {
 
   const mergedAccounts = mergeAccounts(localAccounts, serverAccounts, updatedTime);
 
+  // 比较同步前后的账户是否有变化
+  if (areAccountsEqual(preSyncAccounts, mergedAccounts)) {
+    // 如果没有变化，只更新同步时间而不更新账户数据
+    await db.update(schema.accounts).set({syncAt: new Date()}).run();
+    return; // 直接返回，不进行后续更新操作
+  }
+
+  // 如果有变化，才更新本地数据库
   await updateLocalDatabase(db, mergedAccounts);
 
   const accountsToSync = mergedAccounts
