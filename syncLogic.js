@@ -39,11 +39,12 @@ async function updateLocalDatabase(db, accounts) {
         if (account.deletedAt === null || account.deletedAt === undefined) {
           // compare all fields
           const acc = await tx.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
-          if (acc.issuer === account.issuer &&
+          if (acc && acc.issuer === account.issuer &&
             acc.accountName === account.accountName &&
             acc.secretKey === account.secretKey &&
             acc.deletedAt === account.deletedAt &&
-            acc.origin === account.origin
+            acc.origin === account.origin &&
+            acc.changedAt && new Date(acc.changedAt).getTime() === new Date(account.changedAt).getTime()
           ) {
             continue;
           }
