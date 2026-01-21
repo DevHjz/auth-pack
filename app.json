@@ -1,12 +1,15 @@
 {
   "expo": {
     "name": "云验令牌",
-    "slug": "casdoor-authenticator",
-    "version": "1.22.0",
+    "slug": "hcv-authenticator",
+    "version": "1.22.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "scheme": "casdoor-authenticator",
+    "scheme": [
+    "casdoor-authenticator",
+    "hcv-authenticator"
+  ],
     "sdkVersion": "52.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -21,8 +24,8 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "org.casdoor.casdoorapp",
-      "buildNumber": "1.22.0"
+      "bundleIdentifier": "com.DevHjz.sso",
+      "buildNumber": "1.22.1"
     },
     "android": {
       "adaptiveIcon": {
@@ -50,7 +53,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to add Totp account."
+          "photosPermission": "The app accesses your photos to add TOTP account."
         }
       ],
       "expo-asset",
@@ -63,6 +66,6 @@
         }
       ]
     ],
-    "owner": "casdoor"
+    "owner": "DevHjz"
   }
 }
