@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import React, {useEffect, useRef, useState, memo} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {Dimensions, InteractionManager, RefreshControl, TouchableOpacity, View} from "react-native";
 import {Divider, IconButton, List, Modal, Portal, Text} from "react-native-paper";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
@@ -44,148 +44,12 @@ const REFRESH_INTERVAL = 300000;
 const OFFSET_X = width * 0.45;
 const OFFSET_Y = height * 0.2;
 
-// 优化1：ListItem 组件独立并使用 memo 缓存，仅依赖项变化时重渲染
-const ListItem = memo(({item, onPress, onEdit, onDelete}) => {
-  const {token, timeRemaining} = useTokenRefresh(item.secretKey);
-  const swipeableRef = useRef(null);
-  // 优化2：每个 ListItem 独立的倒计时 key，避免全局重渲染
-  const [timerKey, setTimerKey] = useState(`${item.id}-${timeRemaining}`);
-
-  // 渲染右侧滑动操作
-  const renderRightActions = (progress, dragX) => {
-    const styleAnimation = useAnimatedStyle(() => {
-      return {
-        transform: [{translateX: dragX.value + 160}],
-      };
-    });
-
-    return (
-      <Animated.View style={[{width: 160, flexDirection: "row"}, styleAnimation]}>
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: "#E6DFF3",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-          onPress={() => {
-            dragX.value = withTiming(0);
-            onEdit(item);
-          }}
-        >
-          <MaterialCommunityIcons name="pencil" size={24} color="#666" />
-          <Text style={{marginTop: 4, color: "#666"}}>
-            {onEdit.t("common.edit")} {/* 透传翻译实例 */}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: "#FF6B6B",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-          onPress={() => {
-            dragX.value = withTiming(0);
-            onDelete(item);
-          }}
-        >
-          <MaterialCommunityIcons name="trash-can" size={24} color="#FFF" />
-          <Text style={{marginTop: 4, color: "#FFF"}}>
-            {onEdit.t("common.delete")}
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
-
-  return (
-    <GestureHandlerRootView>
-      <Swipeable
-        ref={swipeableRef}
-        renderRightActions={renderRightActions}
-        rightThreshold={40}
-        overshootRight={false}
-        friction={2}
-        enableTrackpadTwoFingerGesture
-        onSwipeableOpen={() => {
-          if (swipeableRef.current) {
-            swipeableRef.current.close();
-          }
-        }}
-      >
-        <List.Item
-          style={{
-            height: 80,
-            paddingVertical: 6,
-            paddingHorizontal: 16,
-            justifyContent: "center",
-          }}
-          title={
-            <View style={{justifyContent: "center", paddingLeft: 0, paddingTop: 6}}>
-              <Text variant="titleMedium" numberOfLines={1}>
-                {item.accountName}
-              </Text>
-              <Text variant="titleLarge" style={{fontWeight: "bold"}}>{token}</Text>
-            </View>
-          }
-          left={() => (
-            <AvatarWithFallback
-              source={{uri: `https://cdn.casbin.org/img/social_${item.issuer?.toLowerCase()}.png`}}
-              fallbackSource={{uri: "https://cdn.casbin.org/img/social_default.png"}}
-              size={60}
-              style={{
-                borderRadius: 10,
-                backgroundColor: "transparent",
-              }}
-            />
-          )}
-          right={() => (
-            <View style={{justifyContent: "center", alignItems: "center"}}>
-              <CountdownCircleTimer
-                key={timerKey}
-                isPlaying={true}
-                duration={30}
-                initialRemainingTime={timeRemaining}
-                colors={["#004777", "#0072A0", "#0099CC", "#FF6600", "#CC3300", "#A30000"]}
-                colorsTime={[30, 24, 18, 12, 6, 0]}
-                size={60}
-                onComplete={() => {
-                  setTimerKey(`${item.id}-${timeRemaining}`);
-                  return {
-                    shouldRepeat: true,
-                    delay: 0,
-                    newInitialRemainingTime: timeRemaining,
-                  };
-                }}
-                strokeWidth={5}
-              >
-                {({remainingTime}) => (
-                  <Text style={{fontSize: 18, fontWeight: "bold"}}>{remainingTime}s</Text>
-                )}
-              </CountdownCircleTimer>
-            </View>
-          )}
-          onPress={() => onPress(item)}
-        />
-      </Swipeable>
-    </GestureHandlerRootView>
-  );
-}, (prevProps, nextProps) => {
-  // 仅当 item 核心属性变化时重渲染
-  return prevProps.item.id === nextProps.item.id &&
-         prevProps.item.accountName === nextProps.item.accountName &&
-         prevProps.item.secretKey === nextProps.item.secretKey &&
-         prevProps.item.issuer === nextProps.item.issuer;
-});
-
 export default function HomePage() {
   const [isPlusButton, setIsPlusButton] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
   const [showEnterAccountModal, setShowEnterAccountModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredData, setFilteredData] = useState([]); // 初始化改为空数组
+  const [filteredData, setFilteredData] = useState(accounts);
   const [showScanner, setShowScanner] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
@@ -193,6 +57,8 @@ export default function HomePage() {
   const [refreshing, setRefreshing] = useState(false);
   const {isConnected} = useNetInfo();
   const [canSync, setCanSync] = useState(false);
+  const [key, setKey] = useState(0);
+  const swipeableRef = useRef(null);
   const {userInfo, serverUrl, token} = useStore();
   const {startSync} = useAccountSync();
   const {accounts} = useAccounts();
@@ -213,32 +79,27 @@ export default function HomePage() {
   });
   const navigation = useNavigation();
 
-  // 优化3：仅当 accounts 真的变化时更新 filteredData（避免无意义重渲染）
-  useEffect(() => {
-    if (JSON.stringify(accounts) !== JSON.stringify(filteredData)) {
-      setFilteredData(accounts);
-    }
-  }, [accounts]);
-
   useEffect(() => {
     setCanSync(Boolean(isConnected && userInfo && serverUrl));
   }, [isConnected, userInfo, serverUrl]);
 
-  // 优化4：同步逻辑增加防抖，避免UI线程阻塞
+  useEffect(() => {
+    setFilteredData(accounts);
+  }, [accounts]);
+
   useEffect(() => {
     if (canSync) {
       startSync(userInfo, serverUrl, token);
-      let syncTimer = null;
 
-      syncTimer = setInterval(() => {
+      const timer = setInterval(() => {
         InteractionManager.runAfterInteractions(() => {
           startSync(userInfo, serverUrl, token);
         });
       }, REFRESH_INTERVAL);
 
-      return () => clearInterval(syncTimer);
+      return () => clearInterval(timer);
     }
-  }, [startSync, canSync, token, userInfo, serverUrl]);
+  }, [startSync, canSync, token]);
 
   const onRefresh = async() => {
     setRefreshing(true);
@@ -274,6 +135,7 @@ export default function HomePage() {
   };
 
   const handleEditAccount = (account) => {
+    closeSwipeableMenu();
     setEditingAccount(account);
     setPlaceholder(account.accountName);
     setShowEditAccountModal(true);
@@ -336,14 +198,65 @@ export default function HomePage() {
 
   const closeEnterAccountModal = () => setShowEnterAccountModal(false);
 
-  // 优化5：搜索逻辑优化，避免重复过滤
+  const closeSwipeableMenu = () => {
+    if (swipeableRef.current) {
+      swipeableRef.current.close();
+    }
+  };
+
   const handleSearch = (query) => {
     setSearchQuery(query);
-    const trimmedQuery = query.trim().toLowerCase();
-    setFilteredData(
-      trimmedQuery
-        ? accounts?.filter(item => item.accountName.toLowerCase().includes(trimmedQuery))
-        : accounts
+    setFilteredData(query.trim() !== ""
+      ? accounts && accounts.filter(item => item.accountName.toLowerCase().includes(query.toLowerCase()))
+      : accounts
+    );
+  };
+
+  const renderRightActions = (progress, dragX, account, onEdit, onDelete) => {
+    const styleAnimation = useAnimatedStyle(() => {
+      return {
+        transform: [{translateX: dragX.value + 160}],
+      };
+    });
+
+    return (
+      <Animated.View style={[{width: 160, flexDirection: "row"}, styleAnimation]}>
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "#E6DFF3",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          onPress={() => {
+            dragX.value = withTiming(0);
+            onEdit(account);
+          }}
+        >
+          <MaterialCommunityIcons name="pencil" size={24} color="#666" />
+          <Text style={{marginTop: 4, color: "#666"}}>
+            {t("common.edit")}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "#FF6B6B",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          onPress={() => {
+            dragX.value = withTiming(0);
+            onDelete(account);
+          }}
+        >
+          <MaterialCommunityIcons name="trash-can" size={24} color="#FFF" />
+          <Text style={{marginTop: 4, color: "#FFF"}}>
+            {t("common.delete")}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
@@ -356,24 +269,98 @@ export default function HomePage() {
     });
   };
 
+  const ListItem = ({item, onPress}) => {
+    const {token, timeRemaining} = useTokenRefresh(item.secretKey);
+
+    return (
+      <GestureHandlerRootView>
+        <Swipeable
+          ref={swipeableRef}
+          renderRightActions={(progress, dragX) =>
+            renderRightActions(progress, dragX, item, handleEditAccount, onAccountDelete)
+          }
+          rightThreshold={40}
+          overshootRight={false}
+          friction={2}
+          enableTrackpadTwoFingerGesture
+          onSwipeableOpen={() => {
+            if (swipeableRef.current) {
+              swipeableRef.current.close();
+            }
+          }}
+        >
+          <List.Item
+            style={{
+              height: 80,
+              paddingVertical: 6,
+              paddingHorizontal: 16,
+              justifyContent: "center",
+            }}
+            title={
+              <View style={{justifyContent: "center", paddingLeft: 0, paddingTop: 6}}>
+                <Text variant="titleMedium" numberOfLines={1}>
+                  {item.accountName}
+                </Text>
+                <Text variant="titleLarge" style={{fontWeight: "bold"}}>{token}</Text>
+              </View>
+            }
+            left={() => (
+              <AvatarWithFallback
+                source={{uri: `https://cdn.casbin.org/img/social_${item.issuer?.toLowerCase()}.png`}}
+                fallbackSource={{uri: "https://cdn.casbin.org/img/social_default.png"}}
+                size={60}
+                style={{
+                  borderRadius: 10,
+                  backgroundColor: "transparent",
+                }}
+              />
+            )}
+            right={() => (
+              <View style={{justifyContent: "center", alignItems: "center"}}>
+                <CountdownCircleTimer
+                  key={key}
+                  isPlaying={true}
+                  duration={30}
+                  initialRemainingTime={timeRemaining}
+                  colors={["#004777", "#0072A0", "#0099CC", "#FF6600", "#CC3300", "#A30000"]}
+                  colorsTime={[30, 24, 18, 12, 6, 0]}
+                  size={60}
+                  onComplete={() => {
+                    setKey(prevKey => prevKey + 1);
+                    return {
+                      shouldRepeat: true,
+                      delay: 0,
+                      newInitialRemainingTime: timeRemaining,
+                    };
+                  }}
+                  strokeWidth={5}
+                >
+                  {({remainingTime}) => (
+                    <Text style={{fontSize: 18, fontWeight: "bold"}}>{remainingTime}s</Text>
+                  )}
+                </CountdownCircleTimer>
+              </View>
+            )}
+            onPress={() => handleItemPress(item)}
+          />
+        </Swipeable>
+      </GestureHandlerRootView>
+    );
+  };
+
   return (
     <View style={{flex: 1}}>
       <SearchBar onSearch={handleSearch} />
       <FlashList
         data={searchQuery.trim() !== "" ? filteredData : accounts}
         keyExtractor={(item) => `${item.id}`}
+        extraData={key}
         estimatedItemSize={80}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         renderItem={({item}) => (
-          <ListItem 
-            item={item} 
-            onPress={handleItemPress} 
-            onEdit={handleEditAccount} 
-            onDelete={onAccountDelete}
-            t={t} // 透传翻译函数
-          />
+          <ListItem item={item} onPress={handleItemPress} />
         )}
         ItemSeparatorComponent={() => <Divider />}
       />
