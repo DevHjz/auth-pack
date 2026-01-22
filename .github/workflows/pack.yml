@@ -30,11 +30,13 @@ jobs:
           java-version: '18'
           distribution: 'temurin'
 
-      # 4. 打印工作目录（关键：排查路径问题）
-      - name: Print workspace path
+      # 4. 打印工作目录+所有文件（排查路径）
+      - name: Debug workspace & files
         run: |
-          echo "当前工作目录：${GITHUB_WORKSPACE}"
-          ls -lh "${GITHUB_WORKSPACE}"
+          echo "GitHub工作目录：$GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE"
+          # 提前创建android目录（防止空目录）
+          mkdir -p "$GITHUB_WORKSPACE/android/app/build/outputs/apk/release"
 
       # 5. 安装依赖 + 生成原生代码
       - name: Install dependencies & Prebuild
@@ -50,81 +52,95 @@ jobs:
 
       # 6. 构建Release APK（Expo生成的原始包）
       - name: Build Raw Release APK
+        id: build_apk
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs=-Xmx4096m
-          # 验证原始APK生成
-          RAW_APK_PATH="${GITHUB_WORKSPACE}/android/app/build/outputs/apk/release/app-release.apk"
-          if [ ! -f "${RAW_APK_PATH}" ]; then
-            echo "ERROR: 原始APK构建失败！"
+          # 验证原始APK生成 + 打印实际路径
+          RAW_APK_RELATIVE_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          RAW_APK_ABS_PATH="$GITHUB_WORKSPACE/$RAW_APK_RELATIVE_PATH"
+          if [ -f "$RAW_APK_ABS_PATH" ]; then
+            echo "✅ 原始APK构建成功！"
+            echo "相对路径：$RAW_APK_RELATIVE_PATH"
+            echo "绝对路径：$RAW_APK_ABS_PATH"
+            echo "文件大小：$(du -h $RAW_APK_ABS_PATH)"
+            # 输出到step变量，供后续使用
+            echo "apk_relative_path=$RAW_APK_RELATIVE_PATH" >> $GITHUB_OUTPUT
+            echo "apk_abs_path=$RAW_APK_ABS_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "ERROR: 原始APK构建失败！找不到文件：$RAW_APK_ABS_PATH"
+            # 列出所有可能的APK文件，排查实际生成位置
+            echo "===== 所有已生成的APK文件 ====="
+            find "$GITHUB_WORKSPACE" -name "*.apk" -type f
             exit 1
           fi
-          # 打印原始APK信息
-          ls -lh "${RAW_APK_PATH}"
-          echo "✅ 原始APK构建成功：${RAW_APK_PATH}"
 
-      # 7. 优先上传原始APK（核心：确保你能拿到文件，无论后续签名是否成功）
-      - name: Upload Raw APK (GUARANTEED)
+      # 7. 强制上传原始APK（用相对路径，upload-artifact能识别）
+      - name: Upload Raw APK (100% GUARANTEED)
         uses: actions/upload-artifact@v4
         with:
           name: HCV-raw-authenticator.apk
-          path: "${GITHUB_WORKSPACE}/android/app/build/outputs/apk/release/app-release.apk"
+          # 关键：用相对路径（基于仓库根目录），不要用$GITHUB_WORKSPACE
+          path: ${{ steps.build_apk.outputs.apk_relative_path }}
           retention-days: 90
+          # 强制上传（即使文件为空，也提示）
+          if-no-files-found: error
 
-      # 8. 解码自定义keystore（修正路径：用GITHUB_WORKSPACE，避免写死路径）
+      # 8. 解码自定义keystore（修正路径）
       - name: Decode Keystore (with correct path)
+        continue-on-error: true
         run: |
-          # 动态路径：基于工作目录生成keystore路径
-          KEYSTORE_FILE="${GITHUB_WORKSPACE}/android/my-release-key.keystore"
-          # 确保android目录存在
-          mkdir -p "${GITHUB_WORKSPACE}/android"
+          KEYSTORE_FILE="$GITHUB_WORKSPACE/android/my-release-key.keystore"
+          mkdir -p "$GITHUB_WORKSPACE/android"
           # 解码keystore
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "${KEYSTORE_FILE}"
-          chmod 600 "${KEYSTORE_FILE}"
-          # 打印keystore路径+校验是否存在
-          echo "Keystore文件路径：${KEYSTORE_FILE}"
-          ls -lh "${KEYSTORE_FILE}" || echo "⚠️ Keystore文件解码失败（但不影响你拿原始APK）"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_FILE"
+          chmod 600 "$KEYSTORE_FILE"
+          # 验证keystore
+          if [ -f "$KEYSTORE_FILE" ]; then
+            echo "✅ Keystore解码成功：$KEYSTORE_FILE"
+          else
+            echo "❌ Keystore解码失败（不影响原始APK下载）"
+          fi
 
-      # 9. 尝试签名（容错：失败也不终止流程）
+      # 9. 尝试签名（容错）
       - name: Try Sign APK (continue on error)
         id: sign_apk
-        continue-on-error: true  # 签名失败也继续，确保流程不中断
+        continue-on-error: true
         run: |
-          # 定义所有路径（基于GITHUB_WORKSPACE）
-          KEYSTORE_FILE="${GITHUB_WORKSPACE}/android/my-release-key.keystore"
-          RAW_APK_PATH="${GITHUB_WORKSPACE}/android/app/build/outputs/apk/release/app-release.apk"
-          SIGNED_APK_PATH="${GITHUB_WORKSPACE}/android/app/build/outputs/apk/release/HCV-signed-authenticator.apk"
+          # 读取构建步骤的APK路径
+          RAW_APK_ABS_PATH="${{ steps.build_apk.outputs.apk_abs_path }}"
+          SIGNED_APK_ABS_PATH="$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/HCV-signed-authenticator.apk"
+          KEYSTORE_FILE="$GITHUB_WORKSPACE/android/my-release-key.keystore"
           
           # 找apksigner工具
           APKSIGNER=$(find $ANDROID_HOME -name apksigner | head -1)
-          if [ -z "${APKSIGNER}" ]; then
-            echo "ERROR: apksigner工具未找到！"
-            exit 1
+          if [ -z "$APKSIGNER" ]; then
+            echo "❌ apksigner工具未找到（不影响原始APK下载）"
+            echo "signed_success=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-          # 执行签名
-          if [ -f "${KEYSTORE_FILE}" ]; then
+          # 仅当keystore存在时签名
+          if [ -f "$KEYSTORE_FILE" ]; then
             "${APKSIGNER}" sign \
-              --ks "${KEYSTORE_FILE}" \
+              --ks "$KEYSTORE_FILE" \
               --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
               --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
               --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-              --out "${SIGNED_APK_PATH}" \
-              "${RAW_APK_PATH}"
+              --out "$SIGNED_APK_ABS_PATH" \
+              "$RAW_APK_ABS_PATH"
             
             # 验证签名
-            "${APKSIGNER}" verify "${SIGNED_APK_PATH}"
-            if [ $? -eq 0 ]; then
+            if "${APKSIGNER}" verify "$SIGNED_APK_ABS_PATH"; then
               echo "✅ 签名成功！"
-              ls -lh "${SIGNED_APK_PATH}"
               echo "signed_success=true" >> $GITHUB_OUTPUT
             else
-              echo "❌ 签名验证失败（但你已拿到原始APK）"
+              echo "❌ 签名验证失败（不影响原始APK下载）"
               echo "signed_success=false" >> $GITHUB_OUTPUT
             fi
           else
-            echo "❌ Keystore文件不存在，跳过签名（你已拿到原始APK）"
+            echo "❌ Keystore文件不存在（不影响原始APK下载）"
             echo "signed_success=false" >> $GITHUB_OUTPUT
           fi
 
@@ -134,12 +150,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: HCV-signed-authenticator.apk
-          path: "${GITHUB_WORKSPACE}/android/app/build/outputs/apk/release/HCV-signed-authenticator.apk"
+          path: android/app/build/outputs/apk/release/HCV-signed-authenticator.apk
           retention-days: 90
 
-      # 11. 清理敏感文件（可选）
-      - name: Cleanup (optional)
-        if: always()
+      # 11. 最终确认（打印所有APK文件）
+      - name: Final check (list all APKs)
         run: |
-          rm -f "${GITHUB_WORKSPACE}/android/my-release-key.keystore" || echo "清理keystore失败（非关键）"
-          echo "✅ 流程结束，你可在Artifacts中下载原始APK（HCV-raw-authenticator.apk）"
+          echo "===== 所有生成的APK文件（供你核对） ====="
+          find "$GITHUB_WORKSPACE" -name "*.apk" -type f -exec ls -lh {} \;
+          echo "========================================"
+          echo "✅ 流程结束！请去Actions页面底部的Artifacts下载："
+          echo "   - HCV-raw-authenticator.apk（原始APK，必存在）"
+          echo "   - HCV-signed-authenticator.apk（签名APK，可选）"
