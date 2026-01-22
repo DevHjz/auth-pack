@@ -12,7 +12,6 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    # 增加构建超时保护（避免卡壳）
     timeout-minutes: 30
     steps: 
       - uses: actions/checkout@v4
@@ -21,21 +20,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # 缓存npm依赖（提速，不影响逻辑）
-          cache: 'npm'
+          cache: 'npm' # npm缓存保留（有package.json可匹配）
 
       - name: Set up JDK 18
         uses: actions/setup-java@v4
         with:
           java-version: 18
           distribution: temurin
-          # 缓存JDK依赖（提速）
-          cache: 'gradle'
+          # 移除gradle缓存（此时无gradle文件，缓存无意义且触发错误）
 
       # 步骤1：创建android目录（兼容首次构建）
       - name: Create android directory
         run: mkdir -p android
-        # 即使失败也不终止（极端情况目录已存在）
         continue-on-error: true
 
       # 步骤2：解码Keystore并验证（核心安全+路径校验）
@@ -163,7 +159,6 @@ jobs:
         with:
           name: HCV-authenticator.apk
           path: android/app/build/outputs/apk/release/HCV-authenticator.apk
-          # 保留90天（默认仅90天，按需调整）
           retention-days: 90
 
       # 步骤8：安全清理（无论成败都执行）
