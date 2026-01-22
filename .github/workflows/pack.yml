@@ -1,134 +1,117 @@
-name: Build
+name: Build and Sign APK
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
+    branches: [master]
 
 jobs:
-  build-apk:
+  build-sign-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    steps: 
-      - uses: actions/checkout@v4
+    steps:
+      # 1. 拉取代码
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      # 2. 配置 Node.js（Expo 依赖）
+      - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
+      # 3. 配置 JDK（构建 APK 依赖）
       - name: Set up JDK 18
         uses: actions/setup-java@v4
         with:
-          java-version: 18
-          distribution: temurin
+          java-version: '18'
+          distribution: 'temurin'
 
-      # 步骤1：创建android目录
+      # 4. 提前创建 android 目录（避免路径错误）
       - name: Create android directory
         run: mkdir -p android
-        continue-on-error: true
 
-      # 步骤2：解码Keystore并验证
-      - name: Decode & Verify Keystore
+      # 5. 解码自定义 keystore 文件（从 Secrets 读取）
+      - name: Decode Keystore from Secrets
         run: |
-          KEYSTORE_PATH=$(realpath android/your_keystore.keystore)
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "${KEYSTORE_PATH}"
-          chmod 600 "${KEYSTORE_PATH}"
-          if [ ! -f "${KEYSTORE_PATH}" ]; then
-            echo "ERROR: Keystore file not generated!"
+          # 解码到绝对路径，避免任何路径问题
+          KEYSTORE_FILE="/home/runner/work/auth-pack/auth-pack/android/my-release-key.keystore"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "${KEYSTORE_FILE}"
+          # 设置只读权限，保证安全
+          chmod 600 "${KEYSTORE_FILE}"
+          # 验证文件生成成功
+          if [ ! -f "${KEYSTORE_FILE}" ]; then
+            echo "ERROR: Keystore 文件生成失败！"
             exit 1
           fi
-          echo "Keystore file size: $(du -h "${KEYSTORE_PATH}")"
+          echo "✅ Keystore 文件生成成功：${KEYSTORE_FILE}"
 
-      # 步骤3：生成签名配置文件
-      - name: Create Signing Config
-        run: |
-          KEYSTORE_PATH=$(realpath android/your_keystore.keystore)
-          cat > android/signing.properties << 'EOF'
-          storeFile=${KEYSTORE_PATH}
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          EOF
-          sed -i "s|\${KEYSTORE_PATH}|${KEYSTORE_PATH}|g" android/signing.properties
-          if [ ! -f android/signing.properties ]; then
-            echo "ERROR: Signing config file not generated!"
-            exit 1
-          fi
-          cat android/signing.properties | sed -e "s/storePassword.*/storePassword=******/" -e "s/keyPassword.*/keyPassword=******/"
-
-      # 步骤4：安装依赖+清理重建原生代码
-      - name: Install Dependencies & Prebuild
+      # 6. 安装依赖 + 生成原生代码（仅构建未签名 APK）
+      - name: Install dependencies & Prebuild
         run: |
           npm cache clean --force
           npm install
+          # 生成原生代码（--clean 清缓存）
           npx expo prebuild --platform android --clean
+          # 验证原生代码生成
           if [ ! -d "android/app" ]; then
-            echo "ERROR: Android app directory not generated!"
+            echo "ERROR: Android 原生代码生成失败！"
             exit 1
           fi
 
-      # 步骤5：修复Gradle注入逻辑（核心：不重复定义android块）
-      - name: Inject Signing Config to build.gradle
-        run: |
-          cd android/app
-          # 1. 先读取signing.properties的绝对路径（供sed使用）
-          KEYSTORE_ABS_PATH=$(cat ../signing.properties | grep storeFile | cut -d'=' -f2)
-          # 2. 向已有的android块内插入signingConfigs（避免重复块）
-          # 找到android { 行，在其下插入signingConfigs配置
-          sed -i '/^android {/a \
-              signingConfigs {\
-                  release {\
-                      def propsFile = project.rootProject.file("signing.properties")\
-                      if (!propsFile.exists()) {\
-                          throw new GradleException("Signing config file not found: ${propsFile.absolutePath}")\
-                      }\
-                      def props = new Properties()\
-                      props.load(new FileInputStream(propsFile))\
-                      storeFile file("'${KEYSTORE_ABS_PATH}'")\
-                      storePassword props.getProperty("storePassword").trim()\
-                      keyAlias props.getProperty("keyAlias").trim()\
-                      keyPassword props.getProperty("keyPassword").trim()\
-                      logger.lifecycle("Using Keystore: ${storeFile.absolutePath}")\
-                  }\
-              }' build.gradle
-          # 3. 修改已有的buildTypes.release块，添加signingConfig
-          # 替换原有的buildTypes.release内容，加入signingConfig
-          sed -i '/buildTypes {/a \
-              release {\
-                  signingConfig signingConfigs.release\
-                  minifyEnabled false\
-                  shrinkResources false\
-                  incremental false\
-              }' build.gradle
-          # 验证注入是否成功
-          if ! grep -q "signingConfigs" build.gradle; then
-            echo "ERROR: Signing config not injected!"
-            exit 1
-          fi
-
-      # 步骤6：构建签名APK
-      - name: Build Signed APK
+      # 7. 构建未签名的 Release APK（禁用 Gradle 签名）
+      - name: Build unsigned Release APK
         run: |
           cd android
+          # 赋予 gradlew 执行权限
           chmod +x gradlew
-          ./gradlew assembleRelease --info --stacktrace \
-            -PsigningProperties=signing.properties \
-            -Dorg.gradle.jvmargs=-Xmx2048m
-          APK_PATH="app/build/outputs/apk/release/app-release.apk"
-          if [ ! -f "${APK_PATH}" ]; then
-            echo "ERROR: Signed APK not generated!"
+          # 构建未签名 APK（跳过 Gradle 签名配置）
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs=-Xmx2048m
+          # 验证未签名 APK 生成
+          UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ ! -f "${UNSIGNED_APK}" ]; then
+            echo "ERROR: 未签名 APK 构建失败！"
             exit 1
           fi
-          mv "${APK_PATH}" "app/build/outputs/apk/release/HCV-authenticator.apk"
-          echo "APK generated: $(realpath app/build/outputs/apk/release/HCV-authenticator.apk)"
+          echo "✅ 未签名 APK 构建成功：${UNSIGNED_APK}"
 
-      # 步骤7：上传APK产物
+      # 8. 用 apksigner 手动签名（核心步骤，绕开 Gradle 坑）
+      - name: Sign APK with apksigner
+        run: |
+          # 定义路径
+          KEYSTORE_FILE="/home/runner/work/auth-pack/auth-pack/android/my-release-key.keystore"
+          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          SIGNED_APK="android/app/build/outputs/apk/release/HCV-authenticator.apk"
+          
+          # 找到 apksigner 工具（Android SDK 自带）
+          APKSIGNER=$(find $ANDROID_HOME -name apksigner | head -1)
+          if [ -z "${APKSIGNER}" ]; then
+            echo "ERROR: apksigner 工具未找到！"
+            exit 1
+          fi
+
+          # 执行签名（官方工具，100% 稳定）
+          "${APKSIGNER}" sign \
+            --ks "${KEYSTORE_FILE}" \
+            --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
+            --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --out "${SIGNED_APK}" \
+            "${UNSIGNED_APK}"
+
+          # 验证签名是否成功
+          "${APKSIGNER}" verify "${SIGNED_APK}"
+          if [ $? -eq 0 ]; then
+            echo "✅ APK 签名成功：${SIGNED_APK}"
+          else
+            echo "ERROR: APK 签名失败！"
+            exit 1
+          fi
+
+      # 9. 上传签名后的最终 APK
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
@@ -136,12 +119,9 @@ jobs:
           path: android/app/build/outputs/apk/release/HCV-authenticator.apk
           retention-days: 90
 
-      # 步骤8：安全清理
-      - name: Secure Cleanup
+      # 10. 安全清理敏感文件（必做）
+      - name: Cleanup sensitive files
         if: always()
         run: |
-          rm -f android/your_keystore.keystore
-          rm -f android/signing.properties
-          if [ -f "android/your_keystore.keystore" ]; then
-            echo "WARNING: Keystore cleanup failed!"
-          fi
+          rm -f /home/runner/work/auth-pack/auth-pack/android/my-release-key.keystore
+          echo "✅ 敏感文件已清理"
