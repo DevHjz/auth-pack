@@ -20,21 +20,54 @@ jobs:
         with:
           node-version: '20'
 
-      - name: set up JDK 18
+      - name: Set up JDK 18
         uses: actions/setup-java@v4
         with:
           java-version: 18
           distribution: temurin
 
-      - name: Install npm dependencies
+      # 步骤1：从 Secrets 解码生成 keystore 文件（适配Ubuntu环境）
+      - name: Decode Keystore from Secrets
         run: |
-          npm install && npx expo prebuild --platform android
-      - name: Build Android Release
+          # 把Base64编码解码为keystore文件，存到android目录
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/your_keystore.keystore
+          # 给文件添加可读权限（Ubuntu必需）
+          chmod 600 android/your_keystore.keystore
+
+      # 步骤2：创建Gradle签名配置文件（无需修改项目原有build.gradle）
+      - name: Create Signing Config File
         run: |
-          cd android && ./gradlew assembleRelease
-          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/casdoor-authenticator.apk
-      - name: Upload Artifact
+          cat > android/signing.properties << EOF
+          storeFile=your_keystore.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      # 步骤3：安装依赖+强制重新生成原生代码（确保配置生效）
+      - name: Install Dependencies & Prebuild
+        run: |
+          npm install && npx expo prebuild --platform android --clean
+
+      # 步骤4：构建带签名的Release版APK
+      - name: Build Signed APK
+        run: |
+          cd android
+          # 执行签名构建，读取外部配置文件
+          ./gradlew assembleRelease -PsigningProperties=signing.properties
+          # 重命名签名后的APK
+          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/hcv-authenticator.apk
+
+      # 步骤5：上传签名后的APK产物
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: casdoor-authenticator.apk
-          path: android/app/build/outputs/apk/release/
+          name: hcv-authenticator.apk
+          path: android/app/build/outputs/apk/release/hcv-authenticator.apk
+
+      # 步骤6：清理临时文件（安全加固，可选但推荐）
+      - name: Clean Up
+        if: always()
+        run: |
+          rm -f android/your_keystore.keystore
+          rm -f android/signing.properties
