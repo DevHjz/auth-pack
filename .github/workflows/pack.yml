@@ -26,7 +26,7 @@ jobs:
           java-version: 18
           distribution: temurin
 
-      # ========== 新增：先创建android目录（解决路径不存在问题） ==========
+      # 新增：先创建android目录（解决路径不存在问题）
       - name: Create android directory
         run: mkdir -p android
 
@@ -52,6 +52,38 @@ jobs:
       - name: Install Dependencies & Prebuild
         run: |
           npm install && npx expo prebuild --platform android --clean
+
+      # 关键新增：向生成的build.gradle注入签名配置（解决--clean覆盖问题）
+      - name: Inject Signing Config to build.gradle
+        run: |
+          cd android/app
+          # 向build.gradle末尾追加签名配置逻辑，确保读取signing.properties
+          cat >> build.gradle << 'EOF'
+
+          android {
+              signingConfigs {
+                  release {
+                      def propsFile = project.rootProject.file("signing.properties")
+                      if (propsFile.exists()) {
+                          def props = new Properties()
+                          props.load(new FileInputStream(propsFile))
+                          storeFile file(props.getProperty("storeFile"))
+                          storePassword props.getProperty("storePassword")
+                          keyAlias props.getProperty("keyAlias")
+                          keyPassword props.getProperty("keyPassword")
+                      }
+                  }
+              }
+              buildTypes {
+                  release {
+                      // 强制使用自定义签名配置
+                      signingConfig signingConfigs.release
+                      // 保留Expo默认的混淆等配置
+                      minifyEnabled false
+                  }
+              }
+          }
+          EOF
 
       # 步骤4：构建带签名的Release版APK
       - name: Build Signed APK
