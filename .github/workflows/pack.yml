@@ -49,7 +49,7 @@ jobs:
           fi
           echo "✅ Keystore 文件生成成功：${KEYSTORE_FILE}"
 
-      # 6. 安装依赖 + 生成原生代码（仅构建未签名 APK）
+      # 6. 安装依赖 + 生成原生代码
       - name: Install dependencies & Prebuild
         run: |
           npm cache clean --force
@@ -62,28 +62,30 @@ jobs:
             exit 1
           fi
 
-      # 7. 构建未签名的 Release APK（禁用 Gradle 签名）
-      - name: Build unsigned Release APK
+      # 7. 构建 Release APK（Expo 生成的是带调试签名的 app-release.apk）
+      - name: Build Release APK
         run: |
           cd android
           # 赋予 gradlew 执行权限
           chmod +x gradlew
-          # 构建未签名 APK（跳过 Gradle 签名配置）
-          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs=-Xmx2048m
-          # 验证未签名 APK 生成
-          UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
-          if [ ! -f "${UNSIGNED_APK}" ]; then
-            echo "ERROR: 未签名 APK 构建失败！"
+          # 构建 Release APK（Expo 生成 app-release.apk）
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs=-Xmx3072m
+          # 验证 APK 生成（修正文件名：找 app-release.apk 而非 unsigned 版本）
+          BUILT_APK="app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "${BUILT_APK}" ]; then
+            echo "ERROR: Release APK 构建失败！"
             exit 1
           fi
-          echo "✅ 未签名 APK 构建成功：${UNSIGNED_APK}"
+          # 打印 APK 路径和大小，确认存在
+          ls -lh "${BUILT_APK}"
+          echo "✅ Release APK 构建成功：${BUILT_APK}"
 
-      # 8. 用 apksigner 手动签名（核心步骤，绕开 Gradle 坑）
+      # 8. 用 apksigner 手动签名（先移除调试签名，再用自定义 keystore 签名）
       - name: Sign APK with apksigner
         run: |
           # 定义路径
           KEYSTORE_FILE="/home/runner/work/auth-pack/auth-pack/android/my-release-key.keystore"
-          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          BUILT_APK="android/app/build/outputs/apk/release/app-release.apk"
           SIGNED_APK="android/app/build/outputs/apk/release/HCV-authenticator.apk"
           
           # 找到 apksigner 工具（Android SDK 自带）
@@ -93,19 +95,22 @@ jobs:
             exit 1
           fi
 
-          # 执行签名（官方工具，100% 稳定）
+          # 执行签名（覆盖原有调试签名）
           "${APKSIGNER}" sign \
             --ks "${KEYSTORE_FILE}" \
             --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
             --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
             --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --overwrite \  # 覆盖原有调试签名
             --out "${SIGNED_APK}" \
-            "${UNSIGNED_APK}"
+            "${BUILT_APK}"
 
           # 验证签名是否成功
           "${APKSIGNER}" verify "${SIGNED_APK}"
           if [ $? -eq 0 ]; then
             echo "✅ APK 签名成功：${SIGNED_APK}"
+            # 打印签名信息，确认用的是自定义 keystore
+            "${APKSIGNER}" verify --print-certs "${SIGNED_APK}"
           else
             echo "ERROR: APK 签名失败！"
             exit 1
