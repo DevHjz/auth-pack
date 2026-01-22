@@ -24,7 +24,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.DevHjz.sso",
+      "bundleIdentifier": "com.devhjz.sso",
       "buildNumber": "1.22.1"
     },
     "android": {
@@ -32,7 +32,7 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.DevHjz.sso",
+      "package": "com.devhjz.sso",
       "versionCode": 520012200
     },
     "web": {
