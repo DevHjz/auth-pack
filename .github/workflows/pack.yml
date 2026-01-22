@@ -20,140 +20,115 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm' # npm缓存保留（有package.json可匹配）
+          cache: 'npm'
 
       - name: Set up JDK 18
         uses: actions/setup-java@v4
         with:
           java-version: 18
           distribution: temurin
-          # 移除gradle缓存（此时无gradle文件，缓存无意义且触发错误）
 
-      # 步骤1：创建android目录（兼容首次构建）
+      # 步骤1：创建android目录
       - name: Create android directory
         run: mkdir -p android
         continue-on-error: true
 
-      # 步骤2：解码Keystore并验证（核心安全+路径校验）
+      # 步骤2：解码Keystore并验证
       - name: Decode & Verify Keystore
         run: |
-          # 解码Keystore到绝对路径（避免相对路径歧义）
           KEYSTORE_PATH=$(realpath android/your_keystore.keystore)
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "${KEYSTORE_PATH}"
-          # 设置安全权限（仅当前用户可读）
           chmod 600 "${KEYSTORE_PATH}"
-          # 强制校验文件是否生成（失败则终止）
           if [ ! -f "${KEYSTORE_PATH}" ]; then
             echo "ERROR: Keystore file not generated!"
             exit 1
           fi
-          # 打印文件大小（验证完整性，不泄露内容）
           echo "Keystore file size: $(du -h "${KEYSTORE_PATH}")"
 
-      # 步骤3：生成签名配置文件（绝对路径+语法校验）
+      # 步骤3：生成签名配置文件
       - name: Create Signing Config
         run: |
           KEYSTORE_PATH=$(realpath android/your_keystore.keystore)
-          # 生成配置文件（用EOF闭合，避免符号转义问题）
           cat > android/signing.properties << 'EOF'
           storeFile=${KEYSTORE_PATH}
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           EOF
-          # 替换变量（解决EOF单引号无法解析变量的问题）
           sed -i "s|\${KEYSTORE_PATH}|${KEYSTORE_PATH}|g" android/signing.properties
-          # 校验配置文件（失败则终止）
           if [ ! -f android/signing.properties ]; then
             echo "ERROR: Signing config file not generated!"
             exit 1
           fi
-          # 打印配置（隐藏密码，仅验证路径）
           cat android/signing.properties | sed -e "s/storePassword.*/storePassword=******/" -e "s/keyPassword.*/keyPassword=******/"
 
-      # 步骤4：安装依赖+清理重建原生代码（核心缓存规避）
+      # 步骤4：安装依赖+清理重建原生代码
       - name: Install Dependencies & Prebuild
         run: |
-          # 强制清理npm缓存（避免依赖冲突）
           npm cache clean --force
           npm install
-          # 强制重建android目录（确保配置最新）
           npx expo prebuild --platform android --clean
-          # 验证android/app目录是否生成
           if [ ! -d "android/app" ]; then
             echo "ERROR: Android app directory not generated!"
             exit 1
           fi
 
-      # 步骤5：注入Gradle签名配置（Groovy语法100%正确）
+      # 步骤5：修复Gradle注入逻辑（核心：不重复定义android块）
       - name: Inject Signing Config to build.gradle
         run: |
           cd android/app
-          # 注入签名配置（Groovy语法严格校验）
-          cat >> build.gradle << 'EOF'
-          android {
-              // 确保签名配置在buildTypes之前加载
-              signingConfigs {
-                  release {
-                      def propsFile = project.rootProject.file("signing.properties")
-                      // 严格校验配置文件存在性
-                      if (!propsFile.exists()) {
-                          throw new GradleException("Signing config file not found: ${propsFile.absolutePath}")
-                      }
-                      // 加载配置（处理编码问题）
-                      def props = new Properties()
-                      props.load(new FileInputStream(propsFile))
-                      // 绝对路径加载Keystore（核心修复）
-                      storeFile file(props.getProperty("storeFile").trim())
-                      storePassword props.getProperty("storePassword").trim()
-                      keyAlias props.getProperty("keyAlias").trim()
-                      keyPassword props.getProperty("keyPassword").trim()
-                      // 日志输出（仅调试，无敏感信息）
-                      logger.lifecycle("Using Keystore: ${storeFile.absolutePath}")
-                      logger.lifecycle("Using Key Alias: ${keyAlias}")
-                  }
-              }
-              buildTypes {
-                  release {
-                      // 强制绑定签名配置
-                      signingConfig signingConfigs.release
-                      // 关闭混淆/压缩（避免新手踩坑）
-                      minifyEnabled false
-                      shrinkResources false
-                      // 关闭增量构建（避免缓存）
-                      incremental false
-                  }
-              }
-          }
-          EOF
-          # 验证build.gradle修改成功
+          # 1. 先读取signing.properties的绝对路径（供sed使用）
+          KEYSTORE_ABS_PATH=$(cat ../signing.properties | grep storeFile | cut -d'=' -f2)
+          # 2. 向已有的android块内插入signingConfigs（避免重复块）
+          # 找到android { 行，在其下插入signingConfigs配置
+          sed -i '/^android {/a \
+              signingConfigs {\
+                  release {\
+                      def propsFile = project.rootProject.file("signing.properties")\
+                      if (!propsFile.exists()) {\
+                          throw new GradleException("Signing config file not found: ${propsFile.absolutePath}")\
+                      }\
+                      def props = new Properties()\
+                      props.load(new FileInputStream(propsFile))\
+                      storeFile file("'${KEYSTORE_ABS_PATH}'")\
+                      storePassword props.getProperty("storePassword").trim()\
+                      keyAlias props.getProperty("keyAlias").trim()\
+                      keyPassword props.getProperty("keyPassword").trim()\
+                      logger.lifecycle("Using Keystore: ${storeFile.absolutePath}")\
+                  }\
+              }' build.gradle
+          # 3. 修改已有的buildTypes.release块，添加signingConfig
+          # 替换原有的buildTypes.release内容，加入signingConfig
+          sed -i '/buildTypes {/a \
+              release {\
+                  signingConfig signingConfigs.release\
+                  minifyEnabled false\
+                  shrinkResources false\
+                  incremental false\
+              }' build.gradle
+          # 验证注入是否成功
           if ! grep -q "signingConfigs" build.gradle; then
             echo "ERROR: Signing config not injected!"
             exit 1
           fi
 
-      # 步骤6：构建签名APK（带完整日志+错误捕获）
+      # 步骤6：构建签名APK
       - name: Build Signed APK
         run: |
           cd android
-          # 赋予gradlew执行权限（避免权限不足）
           chmod +x gradlew
-          # 构建（带详细日志，失败则打印堆栈）
           ./gradlew assembleRelease --info --stacktrace \
             -PsigningProperties=signing.properties \
-            -Dorg.gradle.jvmargs=-Xmx2048m # 增加内存（避免OOM）
-          # 验证APK是否生成
+            -Dorg.gradle.jvmargs=-Xmx2048m
           APK_PATH="app/build/outputs/apk/release/app-release.apk"
           if [ ! -f "${APK_PATH}" ]; then
             echo "ERROR: Signed APK not generated!"
             exit 1
           fi
-          # 重命名APK（确保文件名唯一）
           mv "${APK_PATH}" "app/build/outputs/apk/release/HCV-authenticator.apk"
-          # 打印APK信息
           echo "APK generated: $(realpath app/build/outputs/apk/release/HCV-authenticator.apk)"
 
-      # 步骤7：上传APK产物（指定完整路径）
+      # 步骤7：上传APK产物
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
@@ -161,14 +136,12 @@ jobs:
           path: android/app/build/outputs/apk/release/HCV-authenticator.apk
           retention-days: 90
 
-      # 步骤8：安全清理（无论成败都执行）
+      # 步骤8：安全清理
       - name: Secure Cleanup
         if: always()
         run: |
-          # 删除Keystore和配置文件（避免泄露）
           rm -f android/your_keystore.keystore
           rm -f android/signing.properties
-          # 验证清理结果
           if [ -f "android/your_keystore.keystore" ]; then
             echo "WARNING: Keystore cleanup failed!"
           fi
