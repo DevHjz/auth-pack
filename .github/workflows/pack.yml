@@ -60,14 +60,14 @@ jobs:
           # 执行签名构建，读取外部配置文件
           ./gradlew assembleRelease -PsigningProperties=signing.properties
           # 重命名签名后的APK
-          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/casdoor-authenticator.apk
+          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/HCV-authenticator.apk
 
       # 步骤5：上传签名后的APK产物
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: casdoor-authenticator.apk
-          path: android/app/build/outputs/apk/release/casdoor-authenticator.apk
+          name: HCV-authenticator.apk
+          path: android/app/build/outputs/apk/release/HCV-authenticator.apk
 
       # 步骤6：清理临时文件（安全加固，可选但推荐）
       - name: Clean Up
