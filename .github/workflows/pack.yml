@@ -80,7 +80,7 @@ jobs:
           ls -lh "${BUILT_APK}"
           echo "✅ Release APK 构建成功：${BUILT_APK}"
 
-      # 8. 用 apksigner 手动签名（先移除调试签名，再用自定义 keystore 签名）
+      # 8. 用 apksigner 手动签名（移除不兼容的 --overwrite 参数）
       - name: Sign APK with apksigner
         run: |
           # 定义路径
@@ -95,13 +95,12 @@ jobs:
             exit 1
           fi
 
-          # 执行签名（覆盖原有调试签名）
+          # 执行签名（移除 --overwrite，直接输出到新文件即可）
           "${APKSIGNER}" sign \
             --ks "${KEYSTORE_FILE}" \
             --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
             --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
             --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-            --overwrite \  # 覆盖原有调试签名
             --out "${SIGNED_APK}" \
             "${BUILT_APK}"
 
