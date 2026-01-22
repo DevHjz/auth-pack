@@ -26,6 +26,10 @@ jobs:
           java-version: 18
           distribution: temurin
 
+      # ========== 新增：先创建android目录（解决路径不存在问题） ==========
+      - name: Create android directory
+        run: mkdir -p android
+
       # 步骤1：从 Secrets 解码生成 keystore 文件（适配Ubuntu环境）
       - name: Decode Keystore from Secrets
         run: |
@@ -56,14 +60,14 @@ jobs:
           # 执行签名构建，读取外部配置文件
           ./gradlew assembleRelease -PsigningProperties=signing.properties
           # 重命名签名后的APK
-          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/hcv-authenticator.apk
+          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/casdoor-authenticator.apk
 
       # 步骤5：上传签名后的APK产物
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: hcv-authenticator.apk
-          path: android/app/build/outputs/apk/release/hcv-authenticator.apk
+          name: casdoor-authenticator.apk
+          path: android/app/build/outputs/apk/release/casdoor-authenticator.apk
 
       # 步骤6：清理临时文件（安全加固，可选但推荐）
       - name: Clean Up
