@@ -32,7 +32,7 @@
   },
   "enterCasdoorSDKConfig": {
     "Please fill in all the fields!": "请填写所有字段！",
-    "Casdoor Configuration": "Casdoor 配置",
+    "Casdoor Configuration": "认证服务配置",
     "Server URL": "服务器地址",
     "Client ID": "客户端 ID",
     "Application Name": "应用名称",
@@ -57,7 +57,7 @@
     "Select Login Method": "选择登录方式",
     "Manual Server Setup": "手动服务器设置",
     "Login Using QR Code": "使用二维码登录",
-    "Try Casdoor Demo Site": "使用默认云验服务"
+    "Try Casdoor Demo Site": "使用云端验证服务"
   },
   "msAuthImport": {
     "Error creating directory": "创建目录错误",
@@ -93,9 +93,9 @@
   },
   "syncLogic": {
     "Sync failed": "同步失败",
-    "Access token has expired, please login again": "访问令牌已过期，请重新登录",
+    "Access token has expired, please login again": "访问令牌已过期，请重新登录。",
     "Sync success": "同步成功",
-    "All your accounts are up to date.": "您的所有账户均已更新至最新状态"
+    "All your accounts are up to date.": "您的所有账户均已更新至最新状态。"
   },
   "itemDetail": {
     "token": "令牌",
