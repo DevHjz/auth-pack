@@ -14,9 +14,9 @@
 
 const DefaultCasdoorSdkConfig = {
   serverUrl: "https://sso.devhjz.com",
-  clientId: "b39a5ad6d95848ffde82",
-  appName: "Cloud",
-  organizationName: "Cloud",
+  clientId: "6f6a7b4337ffb3d3ee3f",
+  appName: "Public-APP",
+  organizationName: "Public-IAM",
   redirectPath: "http://casdoor-authenticator",
   signinPath: "/api/signin",
 };
