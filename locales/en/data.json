@@ -32,14 +32,14 @@
   },
   "enterCasdoorSDKConfig": {
     "Please fill in all the fields!": "Please fill in all the fields!",
-    "Casdoor Configuration": "Casdoor Configuration",
+    "Casdoor Configuration": "Server Configuration",
     "Server URL": "Server URL",
     "Client ID": "Client ID",
     "Application Name": "Application Name",
     "Organization Name": "Organization Name"
   },
   "header": {
-    "Casdoor": "Casdoor",
+    "Casdoor": "Cloud Verify OTP",
     "An unknown error occurred during synchronization": "An unknown error occurred during synchronization"
   },
   "homepage": {
@@ -57,7 +57,7 @@
     "Select Login Method": "Select Login Method",
     "Manual Server Setup": "Manual Server Setup",
     "Login Using QR Code": "Login Using QR Code",
-    "Try Casdoor Demo Site": "Try Casdoor Demo Site"
+    "Try Casdoor Demo Site": "Use Cloud Verify Server"
   },
   "msAuthImport": {
     "Error creating directory": "Error creating directory",
