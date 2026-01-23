@@ -2,7 +2,7 @@
   "expo": {
     "name": "云验令牌",
     "slug": "hcv-authenticator",
-    "version": "1.22.2-Cloud",
+    "version": "1.22.2-Public",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,7 +25,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.devhjz.sso",
-      "buildNumber": "1.22.2-Cloud"
+      "buildNumber": "1.22.2-Public"
     },
     "android": {
       "adaptiveIcon": {
