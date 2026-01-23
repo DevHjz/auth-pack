@@ -19,36 +19,51 @@ import {Text} from "react-native-paper";
 import {useTranslation} from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// 保留需要的语言
 import en from "./locales/en/data.json";
 import zh from "./locales/zh/data.json";
-import ja from "./locales/ja/data.json";
-import fr from "./locales/fr/data.json";
-import de from "./locales/de/data.json";
-import ko from "./locales/ko/data.json";
-import ar from "./locales/ar/data.json";
-import es from "./locales/es/data.json";
-import ru from "./locales/ru/data.json";
-import pt from "./locales/pt/data.json";
-import th from "./locales/th/data.json";
-import uk from "./locales/uk/data.json";
+// import ja from "./locales/ja/data.json";
+// import fr from "./locales/fr/data.json";
+// import de from "./locales/de/data.json";
+// import ko from "./locales/ko/data.json";
+// import ar from "./locales/ar/data.json";
+// import es from "./locales/es/data.json";
+// import ru from "./locales/ru/data.json";
+// import pt from "./locales/pt/data.json";
+// import th from "./locales/th/data.json";
+// import uk from "./locales/uk/data.json";
 
-const StaticBaseUrl = "https://cdn.casbin.org";
+const StaticBaseUrl = "https://static.sso.devhjz.com";
 
-const languageResources = {en, zh, ja, fr, de, ko, ar, es, ru, pt, th, uk};
+// 保留需要的语言属性，注释其他
+const languageResources = {
+  en, 
+  zh, 
+  // ja, 
+  // fr, 
+  // de, 
+  // ko, 
+  // ar, 
+  // es, 
+  // ru, 
+  // pt, 
+  // th, 
+  // uk
+};
 
 export const languages = [
   {label: "English", key: "en", country: "US", alt: "English"},
-  {label: "Español", key: "es", country: "ES", alt: "Spanish"},
-  {label: "Français", key: "fr", country: "FR", alt: "French"},
-  {label: "Deutsch", key: "de", country: "DE", alt: "German"},
   {label: "中文", key: "zh", country: "CN", alt: "中文"},
-  {label: "日本語", key: "ja", country: "JP", alt: "Japanese"},
-  {label: "한국어", key: "ko", country: "KR", alt: "Korean"},
-  {label: "Русский", key: "ru", country: "RU", alt: "Russian"},
-  {label: "Português", key: "pt", country: "PT", alt: "Portuguese"},
-  {label: "العربية", key: "ar", country: "SA", alt: "Arabic"},
-  {label: "Українська", key: "uk", country: "UA", alt: "Ukrainian"},
-  {label: "Thai", key: "th", country: "TH", alt: "Thai"},
+  // {label: "Español", key: "es", country: "ES", alt: "Spanish"},
+  // {label: "Français", key: "fr", country: "FR", alt: "French"},
+  // {label: "Deutsch", key: "de", country: "DE", alt: "German"},
+  // {label: "日本語", key: "ja", country: "JP", alt: "Japanese"},
+  // {label: "한국어", key: "ko", country: "KR", alt: "Korean"},
+  // {label: "Русский", key: "ru", country: "RU", alt: "Russian"},
+  // {label: "Português", key: "pt", country: "PT", alt: "Portuguese"},
+  // {label: "العربية", key: "ar", country: "SA", alt: "Arabic"},
+  // {label: "Українська", key: "uk", country: "UA", alt: "Ukrainian"},
+  // {label: "Thai", key: "th", country: "TH", alt: "Thai"},
 ];
 
 const rtlLanguages = ["ar"];
