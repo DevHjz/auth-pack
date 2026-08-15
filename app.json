@@ -65,15 +65,7 @@
           "userTrackingPermission": "This identifier will be used to check which item is created by the user."
         }
       ],
-      "expo-secure-store",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "kotlinVersion": "1.9.25"
-          }
-        }
-      ]
+      "expo-secure-store"
     ],
     "owner": "DevHjz"
   }
