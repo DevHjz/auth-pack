@@ -1,1 +1,0 @@
-ALTER TABLE `accounts` RENAME COLUMN `device_id` TO `origin`;

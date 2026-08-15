@@ -15,12 +15,8 @@
 import React from "react";
 import {Image} from "expo-image";
 
-function AvatarWithFallback({sourceUri, fallbackSourceUri, size, style}) {
-  const [imageSourceUri, setImageSourceUri] = React.useState(sourceUri);
-
-  React.useEffect(() => {
-    setImageSourceUri(sourceUri);
-  }, [sourceUri]);
+function AvatarWithFallback({source, fallbackSource, size, style}) {
+  const [imageSource, setImageSource] = React.useState(source);
 
   return (
     <Image
@@ -31,15 +27,15 @@ function AvatarWithFallback({sourceUri, fallbackSourceUri, size, style}) {
         height: size,
         ...style,
       }}
-      source={{uri: imageSourceUri}}
-      onError={() => setImageSourceUri(fallbackSourceUri)}
-      placeholder={{uri: fallbackSourceUri}}
+      source={imageSource}
+      onError={() => setImageSource(fallbackSource)}
+      placeholder={fallbackSource}
       placeholderContentFit="cover"
       contentFit="cover"
-      transition={0}
+      transition={300}
       cachePolicy="memory-disk"
     />
   );
 }
 
-export default React.memo(AvatarWithFallback);
+export default AvatarWithFallback;

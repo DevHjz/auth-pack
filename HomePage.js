@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import React, {useEffect, useRef, useState} from "react";
-import {Dimensions, RefreshControl, TouchableOpacity, View} from "react-native";
+import {Dimensions, InteractionManager, RefreshControl, TouchableOpacity, View} from "react-native";
 import {Divider, IconButton, List, Modal, Portal, Text} from "react-native-paper";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -49,16 +49,17 @@ export default function HomePage() {
   const [showOptions, setShowOptions] = useState(false);
   const [showEnterAccountModal, setShowEnterAccountModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredData, setFilteredData] = useState([]);
+  const [filteredData, setFilteredData] = useState(accounts);
   const [showScanner, setShowScanner] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [placeholder, setPlaceholder] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const {isConnected} = useNetInfo();
+  const [canSync, setCanSync] = useState(false);
+  const [key, setKey] = useState(0);
   const swipeableRef = useRef(null);
   const {userInfo, serverUrl, token} = useStore();
-  const canSync = Boolean(isConnected && userInfo && serverUrl && token);
   const {startSync} = useAccountSync();
   const {accounts} = useAccounts();
   const {setAccount, updateAccount, insertAccount, insertAccounts, deleteAccount} = useEditAccount();
@@ -79,21 +80,26 @@ export default function HomePage() {
   const navigation = useNavigation();
 
   useEffect(() => {
+    setCanSync(Boolean(isConnected && userInfo && serverUrl));
+  }, [isConnected, userInfo, serverUrl]);
+
+  useEffect(() => {
     setFilteredData(accounts);
   }, [accounts]);
 
   useEffect(() => {
-    if (!canSync) {
-      return undefined;
-    }
-
-    startSync(userInfo, serverUrl, token);
-    const timer = setInterval(() => {
+    if (canSync) {
       startSync(userInfo, serverUrl, token);
-    }, REFRESH_INTERVAL);
 
-    return () => clearInterval(timer);
-  }, [canSync, startSync, userInfo, serverUrl, token]);
+      const timer = setInterval(() => {
+        InteractionManager.runAfterInteractions(() => {
+          startSync(userInfo, serverUrl, token);
+        });
+      }, REFRESH_INTERVAL);
+
+      return () => clearInterval(timer);
+    }
+  }, [startSync, canSync, token]);
 
   const onRefresh = async() => {
     setRefreshing(true);
@@ -300,8 +306,8 @@ export default function HomePage() {
             }
             left={() => (
               <AvatarWithFallback
-                sourceUri={`https://cdn.casbin.org/img/social_${item.issuer?.toLowerCase()}.png`}
-                fallbackSourceUri="https://cdn.casbin.org/img/social_default.png"
+                source={{uri: `https://cdn.casbin.org/img/social_${item.issuer?.toLowerCase()}.png`}}
+                fallbackSource={{uri: "https://cdn.casbin.org/img/social_default.png"}}
                 size={60}
                 style={{
                   borderRadius: 10,
@@ -312,18 +318,21 @@ export default function HomePage() {
             right={() => (
               <View style={{justifyContent: "center", alignItems: "center"}}>
                 <CountdownCircleTimer
-                  key={`${item.id}-${item.secretKey}`}
+                  key={key}
                   isPlaying={true}
                   duration={30}
                   initialRemainingTime={timeRemaining}
                   colors={["#004777", "#0072A0", "#0099CC", "#FF6600", "#CC3300", "#A30000"]}
                   colorsTime={[30, 24, 18, 12, 6, 0]}
                   size={60}
-                  onComplete={() => ({
-                    shouldRepeat: true,
-                    delay: 0,
-                    newInitialRemainingTime: 30,
-                  })}
+                  onComplete={() => {
+                    setKey(prevKey => prevKey + 1);
+                    return {
+                      shouldRepeat: true,
+                      delay: 0,
+                      newInitialRemainingTime: timeRemaining,
+                    };
+                  }}
                   strokeWidth={5}
                 >
                   {({remainingTime}) => (
@@ -345,6 +354,7 @@ export default function HomePage() {
       <FlashList
         data={searchQuery.trim() !== "" ? filteredData : accounts}
         keyExtractor={(item) => `${item.id}`}
+        extraData={key}
         estimatedItemSize={80}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

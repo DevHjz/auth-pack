@@ -14,70 +14,64 @@
 
 import i18next from "i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {createServerApiUrl} from "./serverUrl";
 
 const TIMEOUT_MS = 5000;
 
+const timeout = (ms) => {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), ms));
+};
+
 const fetchWithTimeout = async(url, options = {}, timeoutMs = TIMEOUT_MS) => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const {signal} = controller;
 
   try {
+    // default headers
     const defaultHeaders = {
-      "Accept-Language": (await AsyncStorage.getItem("language")) || "en",
+      "Accept-Language": await AsyncStorage.getItem("language"),
       "Content-Type": "application/json",
     };
 
     const {token, ...fetchOptions} = options;
+
     if (token) {
       defaultHeaders.Authorization = `Bearer ${token}`;
     }
 
-    const response = await fetch(url, {
+    const finalOptions = {
       ...fetchOptions,
       headers: {
         ...defaultHeaders,
         ...fetchOptions.headers,
       },
-      signal: controller.signal,
-    });
+      signal,
+    };
 
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
+    const result = await Promise.race([
+      fetch(url, finalOptions),
+      timeout(timeoutMs),
+    ]);
+
+    const res = await result.json();
+
+    if (res.status === "error") {
+      throw new Error(res.msg);
     }
 
-    const contentType = response.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      throw new Error("Authentication server returned an invalid response.");
-    }
-
-    const result = await response.json();
-    if (!result || typeof result !== "object") {
-      throw new Error("Authentication server returned an invalid response.");
-    }
-    if (result.status === "error") {
-      throw new Error(result.msg || "Authentication server returned an error.");
-    }
-
-    return result;
+    return res;
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(i18next.t("api.Request timed out"));
     }
     throw error;
   } finally {
-    clearTimeout(timeoutId);
+    controller.abort();
   }
-};
-
-const getUserApiUrl = (serverUrl, owner, name) => {
-  const userId = `${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
-  return createServerApiUrl(serverUrl, `/api/get-user?id=${userId}`);
 };
 
 export const getMfaAccounts = async(serverUrl, owner, name, token, timeoutMs = TIMEOUT_MS) => {
   const res = await fetchWithTimeout(
-    getUserApiUrl(serverUrl, owner, name),
+    `${serverUrl}/api/get-user?id=${owner}/${encodeURIComponent(name)}`,
     {
       method: "GET",
       token,
@@ -86,14 +80,14 @@ export const getMfaAccounts = async(serverUrl, owner, name, token, timeoutMs = T
   );
 
   return {
-    updatedTime: res.data?.updatedTime,
-    mfaAccounts: Array.isArray(res.data?.mfaAccounts) ? res.data.mfaAccounts : [],
+    updatedTime: res.data.updatedTime,
+    mfaAccounts: res.data.mfaAccounts || [],
   };
 };
 
 export const updateMfaAccounts = async(serverUrl, owner, name, newMfaAccounts, token, timeoutMs = TIMEOUT_MS) => {
   const userData = await fetchWithTimeout(
-    getUserApiUrl(serverUrl, owner, name),
+    `${serverUrl}/api/get-user?id=${owner}/${encodeURIComponent(name)}`,
     {
       method: "GET",
       token,
@@ -101,13 +95,10 @@ export const updateMfaAccounts = async(serverUrl, owner, name, newMfaAccounts, t
     timeoutMs
   );
 
-  if (!userData.data || typeof userData.data !== "object") {
-    throw new Error("Authentication server returned an invalid user response.");
-  }
-
   userData.data.mfaAccounts = newMfaAccounts;
+
   const res = await fetchWithTimeout(
-    createServerApiUrl(serverUrl, `/api/update-user?id=${encodeURIComponent(owner)}/${encodeURIComponent(name)}`),
+    `${serverUrl}/api/update-user?id=${owner}/${encodeURIComponent(name)}`,
     {
       method: "POST",
       token,
@@ -120,12 +111,8 @@ export const updateMfaAccounts = async(serverUrl, owner, name, newMfaAccounts, t
 };
 
 export const validateToken = async(serverUrl, token, timeoutMs = TIMEOUT_MS) => {
-  if (!token) {
-    return false;
-  }
-
   const res = await fetchWithTimeout(
-    createServerApiUrl(serverUrl, "/api/userinfo"),
+    `${serverUrl}/api/userinfo`,
     {
       method: "GET",
       token,
@@ -133,9 +120,5 @@ export const validateToken = async(serverUrl, token, timeoutMs = TIMEOUT_MS) => 
     timeoutMs
   );
 
-  if (!res.sub || !res.name || !res.preferred_username) {
-    throw new Error("Authentication server rejected the access token.");
-  }
-
-  return true;
+  return !!(res.sub && res.name && res.preferred_username);
 };

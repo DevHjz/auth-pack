@@ -18,7 +18,6 @@ import * as Clipboard from "expo-clipboard";
 import QRScanner from "./QRScanner";
 import {Button} from "react-native-paper";
 import i18next from "i18next";
-import {normalizeSecureServerUrl} from "./serverUrl";
 
 const ScanQRCodeForLogin = ({onClose, showScanner, onLogin, onError}) => {
   const handleClipboardPaste = async() => {
@@ -67,13 +66,12 @@ const isValidLoginQR = (data) => {
       const serverUrl = params.get("serverUrl");
       const accessToken = params.get("accessToken");
 
-      const normalizedServerUrl = normalizeSecureServerUrl(serverUrl);
-      if (!normalizedServerUrl || !accessToken) {
+      if (!serverUrl || !accessToken) {
         throw new Error(i18next.t("scanLogin.Missing required fields"));
       }
 
       return {
-        serverUrl: normalizedServerUrl,
+        serverUrl,
         accessToken,
       };
     } catch (error) {

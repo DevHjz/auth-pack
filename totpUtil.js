@@ -17,8 +17,9 @@ import {useEffect, useState} from "react";
 
 export function calculateCountdown(period = 30) {
   const now = Date.now() / 1000;
-  const nextPeriod = (Math.floor(now / period) + 1) * period;
-  return Math.max(1, Math.ceil(nextPeriod - now));
+  const currentPeriod = Math.floor(now / period);
+  const nextPeriod = (currentPeriod + 1) * period;
+  return Math.max(0, Math.round(nextPeriod - now));
 }
 
 export function validateSecret(secret) {
@@ -38,44 +39,66 @@ export function generateToken(secret) {
     } catch (error) {
       return "Secret Invalid";
     }
+  } else {
+    return "Secret Empty";
   }
-
-  return "Secret Empty";
 }
 
 export function useTokenRefresh(secretKey, period = 30) {
   const [token, setToken] = useState(() => generateToken(secretKey));
-  const [timeRemaining, setTimeRemaining] = useState(() => calculateCountdown(period));
+  const [timeRemaining, setTimeRemaining] = useState(() => calculateCountdown());
 
   useEffect(() => {
-    let timeoutRef;
-    let isMounted = true;
+    let timerRef = null;
+    let intervalRef = null;
+    let countdownRef = null;
 
     const updateToken = () => {
-      if (!isMounted) {
-        return;
-      }
-
       setToken(generateToken(secretKey));
       setTimeRemaining(calculateCountdown(period));
     };
 
     const scheduleNextUpdate = () => {
-      const now = Date.now();
-      const delay = Math.max(1, period * 1000 - (now % (period * 1000)));
+      const now = Date.now() / 1000;
+      const nextUpdate = Math.ceil(now / period) * period;
+      const delay = Math.max(0, (nextUpdate - now) * 1000);
 
-      timeoutRef = setTimeout(() => {
+      if (timerRef) {
+        clearTimeout(timerRef);
+      }
+      if (intervalRef) {
+        clearInterval(intervalRef);
+      }
+      if (countdownRef) {
+        clearInterval(countdownRef);
+      }
+
+      timerRef = setTimeout(() => {
         updateToken();
-        scheduleNextUpdate();
-      }, delay + 25);
+        intervalRef = setInterval(updateToken, period * 1000);
+      }, delay);
+
+      countdownRef = setInterval(() => {
+        setTimeRemaining(prev => {
+          const remaining = prev - 1;
+          return remaining >= 0 ? remaining : period;
+        });
+      }, 1000);
     };
 
     updateToken();
     scheduleNextUpdate();
 
     return () => {
-      isMounted = false;
-      clearTimeout(timeoutRef);
+      if (timerRef) {
+        clearTimeout(timerRef);
+      }
+      if (intervalRef) {
+        clearInterval(intervalRef);
+      }
+      if (countdownRef) {
+        clearInterval(countdownRef);
+      }
     };
   }, [secretKey, period]);
 

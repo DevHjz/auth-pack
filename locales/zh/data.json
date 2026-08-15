@@ -36,8 +36,7 @@
     "Server URL": "服务器地址",
     "Client ID": "客户端 ID",
     "Application Name": "应用名称",
-    "Organization Name": "组织名称",
-    "Server URL must use HTTPS": "服务器地址必须使用 HTTPS。"
+    "Organization Name": "组织名称"
   },
   "header": {
     "Casdoor": "云验令牌",
