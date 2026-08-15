@@ -22,6 +22,13 @@
       "when": 1734616589186,
       "tag": "0002_rare_ben_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786852800000,
+      "tag": "0003_rename_device_id_to_origin",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,7 @@ import {useNotifications} from "react-native-notificated";
 import PropTypes from "prop-types";
 import useStore from "./useStorage";
 import {useTranslation} from "react-i18next";
+import {normalizeSecureServerUrl} from "./serverUrl";
 
 function EnterCasdoorSdkConfig({onClose, onWebviewClose, usePortal = true}) {
   const {t} = useTranslation();
@@ -51,6 +52,19 @@ function EnterCasdoorSdkConfig({onClose, onWebviewClose, usePortal = true}) {
       });
       return;
     }
+
+    const normalizedServerUrl = normalizeSecureServerUrl(serverUrl);
+    if (!normalizedServerUrl) {
+      notify("error", {
+        params: {
+          title: t("common.error"),
+          description: t("enterCasdoorSDKConfig.Server URL must use HTTPS"),
+        },
+      });
+      return;
+    }
+
+    setServerUrl(normalizedServerUrl);
     onClose();
   };
 

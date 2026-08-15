@@ -14,18 +14,20 @@
 
 import {useActionSheet} from "@expo/react-native-action-sheet";
 import i18next from "i18next";
+import {tenantConfigs} from "./TenantConfigs";
 
 const LoginMethodSelector = ({onSelectMethod}) => {
   const {showActionSheetWithOptions} = useActionSheet();
 
   const openActionSheet = () => {
     const options = [
+      tenantConfigs.cloud.displayName,
+      tenantConfigs.publicIam.displayName,
       i18next.t("loginMethod.Manual Server Setup"),
       i18next.t("loginMethod.Login Using QR Code"),
-      i18next.t("loginMethod.Try Casdoor Demo Site"),
       i18next.t("common.cancel"),
     ];
-    const cancelButtonIndex = 3;
+    const cancelButtonIndex = 4;
 
     showActionSheetWithOptions(
       {
@@ -43,13 +45,16 @@ const LoginMethodSelector = ({onSelectMethod}) => {
   const handleSelection = (buttonIndex) => {
     switch (buttonIndex) {
     case 0:
-      onSelectMethod("manual");
+      onSelectMethod("cloud");
       break;
     case 1:
-      onSelectMethod("scan");
+      onSelectMethod("publicIam");
       break;
     case 2:
-      onSelectMethod("demo");
+      onSelectMethod("manual");
+      break;
+    case 3:
+      onSelectMethod("scan");
       break;
     default:
       // Cancel was pressed

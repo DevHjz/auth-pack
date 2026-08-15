@@ -36,7 +36,8 @@
     "Server URL": "Server URL",
     "Client ID": "Client ID",
     "Application Name": "Application Name",
-    "Organization Name": "Organization Name"
+    "Organization Name": "Organization Name",
+    "Server URL must use HTTPS": "The server URL must use HTTPS."
   },
   "header": {
     "Casdoor": "Cloud Verify OTP",

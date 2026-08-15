@@ -3,9 +3,9 @@ name: Build -> Upload Raw APK -> Sign APK
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   build-and-upload:
@@ -41,8 +41,7 @@ jobs:
       # 5. 安装依赖 + 生成原生代码
       - name: Install dependencies & Prebuild
         run: |
-          npm cache clean --force
-          npm install
+          npm ci
           npx expo prebuild --platform android --clean
           # 验证原生代码生成
           if [ ! -d "android/app" ]; then
@@ -80,7 +79,7 @@ jobs:
       - name: Upload Raw APK (100% GUARANTEED)
         uses: actions/upload-artifact@v4
         with:
-          name: HCV-raw-authenticator.apk
+          name: HUCV-authenticator-2.0-HUCV.apk
           # 关键：用相对路径（基于仓库根目录），不要用$GITHUB_WORKSPACE
           path: ${{ steps.build_apk.outputs.apk_relative_path }}
           retention-days: 90
@@ -90,11 +89,13 @@ jobs:
       # 8. 解码自定义keystore（修正路径）
       - name: Decode Keystore (with correct path)
         continue-on-error: true
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           KEYSTORE_FILE="$GITHUB_WORKSPACE/android/my-release-key.keystore"
           mkdir -p "$GITHUB_WORKSPACE/android"
           # 解码keystore
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_FILE"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_FILE"
           chmod 600 "$KEYSTORE_FILE"
           # 验证keystore
           if [ -f "$KEYSTORE_FILE" ]; then
@@ -107,6 +108,10 @@ jobs:
       - name: Try Sign APK (continue on error)
         id: sign_apk
         continue-on-error: true
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           # 读取构建步骤的APK路径
           RAW_APK_ABS_PATH="${{ steps.build_apk.outputs.apk_abs_path }}"
@@ -125,9 +130,9 @@ jobs:
           if [ -f "$KEYSTORE_FILE" ]; then
             "${APKSIGNER}" sign \
               --ks "$KEYSTORE_FILE" \
-              --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
-              --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
-              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" \
+              --key-pass "pass:$KEY_PASSWORD" \
+              --ks-key-alias "$KEY_ALIAS" \
               --out "$SIGNED_APK_ABS_PATH" \
               "$RAW_APK_ABS_PATH"
             
@@ -149,7 +154,7 @@ jobs:
         if: steps.sign_apk.outputs.signed_success == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: HCV-signed-authenticator.apk
+          name: HUCV-authenticator-2.0-HUCV-signed.apk
           path: android/app/build/outputs/apk/release/HCV-signed-authenticator.apk
           retention-days: 90
 
@@ -160,5 +165,5 @@ jobs:
           find "$GITHUB_WORKSPACE" -name "*.apk" -type f -exec ls -lh {} \;
           echo "========================================"
           echo "✅ 流程结束！请去Actions页面底部的Artifacts下载："
-          echo "   - HCV-raw-authenticator.apk（原始APK，必存在）"
-          echo "   - HCV-signed-authenticator.apk（签名APK，可选）"
+          echo "   - HUCV-authenticator-2.0-HUCV.apk（原始APK，必存在）"
+          echo "   - HUCV-authenticator-2.0-HUCV-signed.apk（签名APK，可选）"

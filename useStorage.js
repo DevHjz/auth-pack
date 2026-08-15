@@ -15,11 +15,27 @@
 import {create} from "zustand";
 import {createJSONStorage, persist} from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 
-const asyncStoragePersistConfig = {
-  setItem: async(key, value) => await AsyncStorage.setItem(key, value),
-  getItem: async(key) => await AsyncStorage.getItem(key),
-  removeItem: async(key) => await AsyncStorage.removeItem(key),
+const secureStoragePersistConfig = {
+  setItem: async(key, value) => await SecureStore.setItemAsync(key, value),
+  getItem: async(key) => {
+    const secureValue = await SecureStore.getItemAsync(key);
+    if (secureValue !== null) {
+      return secureValue;
+    }
+
+    const legacyValue = await AsyncStorage.getItem(key);
+    if (legacyValue !== null) {
+      await SecureStore.setItemAsync(key, legacyValue);
+      await AsyncStorage.removeItem(key);
+    }
+    return legacyValue;
+  },
+  removeItem: async(key) => {
+    await SecureStore.deleteItemAsync(key);
+    await AsyncStorage.removeItem(key);
+  },
 };
 
 const useStore = create(
@@ -62,7 +78,7 @@ const useStore = create(
     }),
     {
       name: "casdoor-storage",
-      storage: createJSONStorage(() => asyncStoragePersistConfig),
+      storage: createJSONStorage(() => secureStoragePersistConfig),
     }
   )
 );

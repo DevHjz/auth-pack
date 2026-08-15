@@ -12,36 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {WebView} from "react-native-webview";
 import {Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity} from "react-native";
 import {Portal} from "react-native-paper";
 import {useNotifications} from "react-native-notificated";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import SDK from "casdoor-react-native-sdk";
 import PropTypes from "prop-types";
 import EnterCasdoorSdkConfig from "./EnterCasdoorSdkConfig";
 import ScanQRCodeForLogin from "./ScanLogin";
 import useStore from "./useStorage";
-import DefaultCasdoorSdkConfig from "./DefaultCasdoorSdkConfig";
+import {getTenantConfig} from "./TenantConfigs";
 import {useTranslation} from "react-i18next";
 import {useLanguageSync} from "./useLanguageSync";
 import {useEditAccount} from "./useAccountStore";
 import * as api from "./api";
 
-let sdk = null;
-
 function CasdoorLoginPage({onWebviewClose, initialMethod}) {
   CasdoorLoginPage.propTypes = {
     onWebviewClose: PropTypes.func.isRequired,
-    initialMethod: PropTypes.oneOf(["manual", "scan", "demo"]).isRequired,
+    initialMethod: PropTypes.oneOf(["cloud", "publicIam", "manual", "scan"]).isRequired,
   };
 
   useLanguageSync();
   const {notify} = useNotifications();
   const {t} = useTranslation();
+  const tenantConfig = getTenantConfig(initialMethod);
   const [casdoorLoginURL, setCasdoorLoginURL] = useState("");
-  const [currentView, setCurrentView] = useState(initialMethod === "scan" ? "scanner" : "config");
+  const [currentView, setCurrentView] = useState(
+    initialMethod === "scan" ? "scanner" : tenantConfig ? "webview" : "config"
+  );
+  const sdkRef = useRef(null);
+  const sdkConfigRef = useRef(null);
 
   const {
     serverUrl,
@@ -49,80 +51,107 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
     redirectPath,
     appName,
     organizationName,
-    token,
     getCasdoorConfig,
     setCasdoorConfig,
-    setServerUrl,
-    setClientId,
-    setAppName,
-    setOrganizationName,
     setUserInfo,
     setToken,
   } = useStore();
 
-  useEffect(() => {
-    if (initialMethod === "demo") {
-      setCasdoorConfig(DefaultCasdoorSdkConfig);
-    }
-  }, [initialMethod, setCasdoorConfig]);
+  const initSdk = (config) => {
+    const sdkConfig = config || (
+      initialMethod === "manual" && serverUrl && clientId && redirectPath && appName && organizationName
+        ? getCasdoorConfig()
+        : null
+    );
 
-  const initSdk = () => {
-    const configs = {
-      demo: DefaultCasdoorSdkConfig,
-      scan: getCasdoorConfig(),
-      manual: serverUrl && clientId && redirectPath && appName && organizationName ? getCasdoorConfig() : null,
-    };
-    sdk = configs[initialMethod] ? new SDK(configs[initialMethod]) : null;
+    sdkConfigRef.current = sdkConfig;
+    sdkRef.current = sdkConfig ? new SDK(sdkConfig) : null;
+    return sdkRef.current;
   };
 
-  const getCasdoorSignInUrl = async() => {
-    initSdk();
-    if (sdk) {
+  const getCasdoorSignInUrl = async(config) => {
+    const sdk = initSdk(config);
+    if (!sdk) {
+      notify("error", {
+        params: {
+          title: t("common.error"),
+          description: t("enterCasdoorSDKConfig.Please fill in all the fields!"),
+        },
+      });
+      return;
+    }
+
+    try {
       const signinUrl = await sdk.getSigninUrl();
       setCasdoorLoginURL(signinUrl);
+    } catch (error) {
+      notify("error", {
+        params: {
+          title: t("common.error"),
+          description: error.message,
+        },
+      });
+      setCurrentView("config");
     }
   };
 
-  const handleLogin = (method) => {
-    const actions = {
-      manual: () => {
-        getCasdoorSignInUrl();
-        setCurrentView("webview");
-      },
-      demo: () => {
-        getCasdoorSignInUrl();
-        setCurrentView("webview");
-      },
-      scan: () => setCurrentView("scanner"),
-    };
+  useEffect(() => {
+    if (tenantConfig) {
+      getCasdoorSignInUrl(tenantConfig);
+    }
+  }, [initialMethod]);
 
-    actions[method]?.();
+  const handleLogin = (method) => {
+    if (method === "scan") {
+      setCurrentView("scanner");
+      return;
+    }
+
+    getCasdoorSignInUrl();
+    setCurrentView("webview");
   };
 
-  const onNavigationStateChange = async(navState) => {
-    if (navState.url.startsWith(redirectPath)) {
-      onWebviewClose();
-      const token = await sdk.getAccessToken(navState.url);
-      const userInfo = sdk.JwtDecode(token);
-      setToken(token);
+  const handleAuthenticationRedirect = async(url) => {
+    const sdk = sdkRef.current;
+    const config = sdkConfigRef.current;
+    if (!sdk || !config) {
+      return;
+    }
+
+    try {
+      const accessToken = await sdk.getAccessToken(url);
+      await api.validateToken(config.serverUrl, accessToken);
+      const userInfo = sdk.JwtDecode(accessToken);
+      setCasdoorConfig(config);
+      setToken(accessToken);
       setUserInfo(userInfo);
+      onWebviewClose();
+    } catch (error) {
+      notify("error", {
+        params: {
+          title: t("common.error"),
+          description: error.message,
+        },
+      });
+      setCurrentView(tenantConfig ? "webview" : "config");
     }
   };
 
   const handleQRLogin = async(loginInfo) => {
-    setServerUrl(loginInfo.serverUrl);
-    setClientId("");
-    setAppName("");
-    setOrganizationName("");
-    initSdk();
+    const config = {
+      ...getCasdoorConfig(),
+      serverUrl: loginInfo.serverUrl,
+      clientId: "",
+      appName: "",
+      organizationName: "",
+    };
 
     try {
-      const accessToken = loginInfo.accessToken;
-      const userInfo = sdk.JwtDecode(accessToken);
-
-      await api.validateToken(loginInfo.serverUrl, accessToken);
-
-      setToken(accessToken);
+      const sdk = initSdk(config);
+      await api.validateToken(config.serverUrl, loginInfo.accessToken);
+      const userInfo = sdk.JwtDecode(loginInfo.accessToken);
+      setCasdoorConfig(config);
+      setToken(loginInfo.accessToken);
       setUserInfo(userInfo);
 
       notify("success", {
@@ -131,7 +160,6 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
           description: t("casdoorLoginPage.Logged in successfully!"),
         },
       });
-      setCurrentView("config");
       onWebviewClose();
     } catch (error) {
       notify("error", {
@@ -147,7 +175,7 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
     const views = {
       config: (
         <EnterCasdoorSdkConfig
-          onClose={() => handleLogin(initialMethod)}
+          onClose={() => handleLogin("manual")}
           onWebviewClose={onWebviewClose}
           usePortal={false}
         />
@@ -156,8 +184,7 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
         <ScanQRCodeForLogin
           showScanner={true}
           onClose={() => {
-            setCurrentView("config");
-            onWebviewClose();
+            setCurrentView(tenantConfig ? "webview" : "config");
           }}
           onLogin={handleQRLogin}
           onError={(message) => {
@@ -165,14 +192,23 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
           }}
         />
       ),
-      webview: casdoorLoginURL && !token && (
+      webview: casdoorLoginURL && (
         <SafeAreaView style={styles.safeArea}>
-          <TouchableOpacity style={styles.backButton} onPress={() => setCurrentView("config")}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => tenantConfig ? onWebviewClose() : setCurrentView("config")}
+          >
             <Text style={styles.backButtonText}>{t("casdoorLoginPage.Back to Config")}</Text>
           </TouchableOpacity>
           <WebView
             source={{uri: casdoorLoginURL}}
-            onNavigationStateChange={onNavigationStateChange}
+            onShouldStartLoadWithRequest={(request) => {
+              if (request.url.startsWith(redirectPath)) {
+                handleAuthenticationRedirect(request.url);
+                return false;
+              }
+              return true;
+            }}
             onError={({nativeEvent}) => {
               notify("error", {
                 params: {
@@ -180,10 +216,10 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
                   description: nativeEvent.description,
                 },
               });
-              setCurrentView("config");
+              setCurrentView(tenantConfig ? "webview" : "config");
             }}
             style={styles.webview}
-            mixedContentMode="always"
+            mixedContentMode="never"
             javaScriptEnabled={true}
           />
         </SafeAreaView>
@@ -220,13 +256,7 @@ export const useCasdoorLogout = () => {
   const {deleteAccountByOrigin} = useEditAccount();
 
   const logout = async() => {
-    const origin = await AsyncStorage.getItem("origin");
-
-    if (sdk) {
-      sdk.clearState();
-    }
-
-    deleteAccountByOrigin(origin);
+    await deleteAccountByOrigin();
   };
 
   return logout;

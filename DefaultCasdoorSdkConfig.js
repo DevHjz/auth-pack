@@ -13,10 +13,10 @@
 // limitations under the License.
 
 const DefaultCasdoorSdkConfig = {
-  serverUrl: "https://sso.devhjz.com",
-  clientId: "b39a5ad6d95848ffde82",
-  appName: "Cloud",
-  organizationName: "Cloud",
+  serverUrl: "",
+  clientId: "",
+  appName: "",
+  organizationName: "",
   redirectPath: "http://casdoor-authenticator",
   signinPath: "/api/signin",
 };

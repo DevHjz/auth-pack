@@ -2,14 +2,14 @@
   "expo": {
     "name": "云验令牌",
     "slug": "hcv-authenticator",
-    "version": "1.22.2-Cloud",
+    "version": "2.0-HUCV",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": [
-    "casdoor-authenticator",
-    "hcv-authenticator"
-  ],
+      "casdoor-authenticator",
+      "hcv-authenticator"
+    ],
     "sdkVersion": "52.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -25,7 +25,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.devhjz.sso",
-      "buildNumber": "1.22.2-Cloud"
+      "buildNumber": "2.0-HUCV"
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +33,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.devhjz.sso",
-      "versionCode": 520012200
+      "versionCode": 520020000
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -64,7 +64,8 @@
         {
           "userTrackingPermission": "This identifier will be used to check which item is created by the user."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "owner": "DevHjz"
   }

@@ -16,7 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {db} from "./db/client";
 import * as schema from "./db/schema";
-import {and, eq, isNull, not, or} from "drizzle-orm";
+import {and, eq, isNull} from "drizzle-orm";
 import {create} from "zustand";
 import {generateToken} from "./totpUtil";
 import {syncWithCloud} from "./syncLogic";
@@ -204,15 +204,8 @@ const useEditAccountStore = create((set, get) => ({
       .run();
   },
 
-  deleteAccountByOrigin: async(origin) => {
-    db.delete(schema.accounts)
-      .where(
-        or(
-          not(eq(schema.accounts.origin, origin)),
-          isNull(schema.accounts.origin)
-        )
-      )
-      .run();
+  deleteAccountByOrigin: async() => {
+    db.delete(schema.accounts).run();
   },
 }));
 
