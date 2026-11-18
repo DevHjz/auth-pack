@@ -33,7 +33,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.devhjz.sso",
-      "versionCode": 520012800
+      "versionCode": 520012801
     },
     "web": {
       "favicon": "./assets/favicon.png"

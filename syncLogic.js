@@ -25,29 +25,39 @@ function handleTokenExpiration() {
 }
 
 function getLocalAccounts(db) {
-  return db.select().from(schema.accounts).all();
+  return db.select({
+    account: schema.accounts,
+    syncAt: schema.accountSyncCheckpoints.syncAt,
+  })
+    .from(schema.accounts)
+    .leftJoin(schema.accountSyncCheckpoints, eq(schema.accounts.id, schema.accountSyncCheckpoints.accountId))
+    .all()
+    .map(({account, syncAt}) => ({...account, syncAt: syncAt ?? account.syncAt}));
 }
 
 function getAccountKey(account) {
   return `${account.accountName}:${account.issuer ?? ""}`;
 }
 
-async function updateLocalDatabase(db, accounts) {
-  return db.transaction(async(tx) => {
+function updateLocalDatabase(db, accounts, localAccounts) {
+  const localAccountsById = new Map(localAccounts.map(account => [account.id, account]));
+  return db.transaction((tx) => {
     for (const account of accounts) {
       if (account.id) {
         if (account.deletedAt === null || account.deletedAt === undefined) {
-          // compare all fields
-          const acc = await tx.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
-          if (acc.issuer === account.issuer &&
-            acc.accountName === account.accountName &&
-            acc.secretKey === account.secretKey &&
-            acc.deletedAt === account.deletedAt &&
-            acc.origin === account.origin
+          const localAccount = localAccountsById.get(account.id);
+          if (!localAccount) {
+            throw new Error(`Account ${account.id} was not present in the sync snapshot`);
+          }
+          if (localAccount.issuer === (account.issuer ?? null) &&
+            localAccount.accountName === account.accountName &&
+            localAccount.secretKey === account.secretKey &&
+            localAccount.deletedAt === (account.deletedAt ?? null) &&
+            localAccount.origin === (account.origin ?? null)
           ) {
             continue;
           }
-          await tx.update(schema.accounts).set({
+          tx.update(schema.accounts).set({
             issuer: account.issuer,
             accountName: account.accountName,
             secretKey: account.secretKey,
@@ -55,18 +65,18 @@ async function updateLocalDatabase(db, accounts) {
             token: generateToken(account.secretKey),
             changedAt: new Date(),
             origin: account.origin,
-          }).where(eq(schema.accounts.id, account.id));
+          }).where(eq(schema.accounts.id, account.id)).run();
         } else {
-          await tx.delete(schema.accounts).where(eq(schema.accounts.id, account.id));
+          tx.delete(schema.accounts).where(eq(schema.accounts.id, account.id)).run();
         }
       } else {
-        await tx.insert(schema.accounts).values({
+        tx.insert(schema.accounts).values({
           issuer: account.issuer || null,
           accountName: account.accountName,
           secretKey: account.secretKey,
           origin: account.origin || null,
           token: generateToken(account.secretKey),
-        });
+        }).run();
       }
     }
   });
@@ -159,7 +169,7 @@ export async function syncWithCloud(db, userInfo, serverUrl, token) {
 
   const mergedAccounts = mergeAccounts(localAccounts, serverAccounts, updatedTime);
 
-  await updateLocalDatabase(db, mergedAccounts);
+  updateLocalDatabase(db, mergedAccounts, localAccounts);
 
   const accountsToSync = mergedAccounts
     .filter(account => account.deletedAt === null || account.deletedAt === undefined)
@@ -197,6 +207,15 @@ export async function syncWithCloud(db, userInfo, serverUrl, token) {
     }
   }
 
-  await db.update(schema.accounts).set({syncAt: new Date()}).run();
+  const currentAccountIds = db.select({id: schema.accounts.id}).from(schema.accounts).all().map(({id}) => id);
+  const syncAt = new Date();
+  db.transaction((tx) => {
+    tx.delete(schema.accountSyncCheckpoints).run();
+    if (currentAccountIds.length > 0) {
+      tx.insert(schema.accountSyncCheckpoints).values(
+        currentAccountIds.map(accountId => ({accountId, syncAt}))
+      ).run();
+    }
+  });
 
 }

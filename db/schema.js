@@ -30,3 +30,7 @@ export const accounts = sqliteTable("accounts", {
   unq: unique().on(accounts.accountName, accounts.issuer),
 })
 );
+export const accountSyncCheckpoints = sqliteTable("account_sync_checkpoints", {
+  accountId: integer("account_id", {mode: "number"}).primaryKey().notNull(),
+  syncAt: integer("sync_at", {mode: "timestamp_ms"}).notNull(),
+});

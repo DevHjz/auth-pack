@@ -20,6 +20,10 @@ import {SafeAreaView} from "react-native-safe-area-context";
 import {useTranslation} from "react-i18next";
 import * as Clipboard from "expo-clipboard";
 import {format} from "date-fns";
+import {eq} from "drizzle-orm";
+import {db} from "./db/client";
+import * as schema from "./db/schema";
+import {useLiveQuery} from "./db/liveQuery";
 import {useTokenRefresh} from "./totpUtil";
 
 const ItemDetailPage = ({route}) => {
@@ -29,9 +33,15 @@ const ItemDetailPage = ({route}) => {
   const {t} = useTranslation();
 
   const {token, timeRemaining} = useTokenRefresh(item.secretKey);
+  const {data: syncCheckpoints} = useLiveQuery(
+    db.select().from(schema.accountSyncCheckpoints)
+      .where(eq(schema.accountSyncCheckpoints.accountId, item.id)),
+    [item.id]
+  );
+  const syncAt = syncCheckpoints[0]?.syncAt ?? item.syncAt;
 
   const copyToClipboard = async(text) => {
-    const textWithoutSpaces = text.replace(/\s/g, '');
+    const textWithoutSpaces = text.replace(/\s/g, "");
     await Clipboard.setStringAsync(textWithoutSpaces);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -81,7 +91,7 @@ const ItemDetailPage = ({route}) => {
           />
           <DetailRow
             label={t("itemDetail.lastSynced")}
-            value={item.syncAt ? format(new Date(item.syncAt), "PPpp") : t("itemDetail.neverSynced")}
+            value={syncAt ? format(new Date(syncAt), "PPpp") : t("itemDetail.neverSynced")}
           />
           <DetailRow label={t("itemDetail.origin")} value={item.origin} />
         </View>
