@@ -13,13 +13,51 @@
 // limitations under the License.
 
 import totp from "totp-generator";
-import {useEffect, useState} from "react";
+import {useMemo, useSyncExternalStore} from "react";
 
-export function calculateCountdown(period = 30) {
-  const now = Date.now() / 1000;
-  const currentPeriod = Math.floor(now / period);
-  const nextPeriod = (currentPeriod + 1) * period;
-  return Math.max(0, Math.round(nextPeriod - now));
+let clockSeconds = Math.floor(Date.now() / 1000);
+let clockTimeout = null;
+const clockSubscribers = new Set();
+
+const getClockSnapshot = () => clockSeconds;
+
+const scheduleClockTick = () => {
+  if (clockTimeout !== null || clockSubscribers.size === 0) {
+    return;
+  }
+
+  const delay = 1000 - (Date.now() % 1000);
+  clockTimeout = setTimeout(() => {
+    clockTimeout = null;
+    const nextClockSeconds = Math.floor(Date.now() / 1000);
+    if (nextClockSeconds !== clockSeconds) {
+      clockSeconds = nextClockSeconds;
+      [...clockSubscribers].forEach(listener => listener());
+    }
+    scheduleClockTick();
+  }, delay || 1000);
+};
+
+const subscribeToClock = (listener) => {
+  clockSubscribers.add(listener);
+  if (clockSubscribers.size === 1) {
+    clockSeconds = Math.floor(Date.now() / 1000);
+    scheduleClockTick();
+  }
+
+  return () => {
+    clockSubscribers.delete(listener);
+    if (clockSubscribers.size === 0 && clockTimeout !== null) {
+      clearTimeout(clockTimeout);
+      clockTimeout = null;
+    }
+  };
+};
+
+export function calculateCountdown(period = 30, now = Date.now()) {
+  const nowSeconds = now / 1000;
+  const nextPeriod = (Math.floor(nowSeconds / period) + 1) * period;
+  return Math.max(0, Math.ceil(nextPeriod - nowSeconds));
 }
 
 export function validateSecret(secret) {
@@ -45,62 +83,10 @@ export function generateToken(secret) {
 }
 
 export function useTokenRefresh(secretKey, period = 30) {
-  const [token, setToken] = useState(() => generateToken(secretKey));
-  const [timeRemaining, setTimeRemaining] = useState(() => calculateCountdown());
+  const nowSeconds = useSyncExternalStore(subscribeToClock, getClockSnapshot, getClockSnapshot);
+  const periodIndex = Math.floor(nowSeconds / period);
+  const token = useMemo(() => generateToken(secretKey), [secretKey, periodIndex]);
+  const timeRemaining = calculateCountdown(period, nowSeconds * 1000);
 
-  useEffect(() => {
-    let timerRef = null;
-    let intervalRef = null;
-    let countdownRef = null;
-
-    const updateToken = () => {
-      setToken(generateToken(secretKey));
-      setTimeRemaining(calculateCountdown(period));
-    };
-
-    const scheduleNextUpdate = () => {
-      const now = Date.now() / 1000;
-      const nextUpdate = Math.ceil(now / period) * period;
-      const delay = Math.max(0, (nextUpdate - now) * 1000);
-
-      if (timerRef) {
-        clearTimeout(timerRef);
-      }
-      if (intervalRef) {
-        clearInterval(intervalRef);
-      }
-      if (countdownRef) {
-        clearInterval(countdownRef);
-      }
-
-      timerRef = setTimeout(() => {
-        updateToken();
-        intervalRef = setInterval(updateToken, period * 1000);
-      }, delay);
-
-      countdownRef = setInterval(() => {
-        setTimeRemaining(prev => {
-          const remaining = prev - 1;
-          return remaining >= 0 ? remaining : period;
-        });
-      }, 1000);
-    };
-
-    updateToken();
-    scheduleNextUpdate();
-
-    return () => {
-      if (timerRef) {
-        clearTimeout(timerRef);
-      }
-      if (intervalRef) {
-        clearInterval(intervalRef);
-      }
-      if (countdownRef) {
-        clearInterval(countdownRef);
-      }
-    };
-  }, [secretKey, period]);
-
-  return {token, timeRemaining};
+  return {token, timeRemaining, periodIndex};
 }

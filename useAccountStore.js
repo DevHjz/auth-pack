@@ -252,6 +252,8 @@ export const useAccountSync = () => useAccountSyncStore(state => ({
   clearSyncError: state.clearSyncError,
 }));
 
+export const useStartAccountSync = () => useAccountSyncStore(state => state.startSync);
+
 const useUpdateAccountTokenStore = create(() => ({
   updateToken: async(id) => {
     const account = db.select().from(schema.accounts)
