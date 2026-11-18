@@ -7,9 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": [
-    "casdoor-authenticator",
-    "hcv-authenticator"
-  ],
+      "casdoor-authenticator",
+      "hcv-authenticator"
+    ],
     "sdkVersion": "52.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -38,10 +38,8 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "c02d2dfe-dd43-46ff-8a3e-e384fbc95b1d"
-      }
+    "experiments": {
+      "baseUrl": "/auth-pack"
     },
     "plugins": [
       [

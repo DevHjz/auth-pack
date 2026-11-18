@@ -38,6 +38,7 @@ import {useImportManager} from "./ImportManager";
 import useStore from "./useStorage";
 import {useTokenRefresh, validateSecret} from "./totpUtil";
 import {useAccountSync, useAccounts, useEditAccount} from "./useAccountStore";
+import {completeWebLogin} from "./webLogin";
 
 const {width, height} = Dimensions.get("window");
 const REFRESH_INTERVAL = 300000;
@@ -49,7 +50,7 @@ export default function HomePage() {
   const [showOptions, setShowOptions] = useState(false);
   const [showEnterAccountModal, setShowEnterAccountModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredData, setFilteredData] = useState(accounts);
+  const [filteredData, setFilteredData] = useState([]);
   const [showScanner, setShowScanner] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
@@ -83,6 +84,29 @@ export default function HomePage() {
     setCanSync(Boolean(isConnected && userInfo && serverUrl));
   }, [isConnected, userInfo, serverUrl]);
 
+  // on the web, finish the login when Casdoor redirects back to the app
+  useEffect(() => {
+    const finishWebLogin = async() => {
+      // the persisted store loads asynchronously and would overwrite a token set before it
+      if (!useStore.persist.hasHydrated()) {
+        await new Promise((resolve) => useStore.persist.onFinishHydration(resolve));
+      }
+      const result = await completeWebLogin();
+      if (result) {
+        const {setCasdoorConfig, setToken, setUserInfo} = useStore.getState();
+        setCasdoorConfig(result.config);
+        setToken(result.token);
+        setUserInfo(result.userInfo);
+        notify("success", {
+          params: {title: t("common.success"), description: t("casdoorLoginPage.Logged in successfully!")},
+        });
+      }
+    };
+    finishWebLogin().catch((error) => {
+      notify("error", {params: {title: t("common.error"), description: error.message}});
+    });
+  }, []);
+
   useEffect(() => {
     setFilteredData(accounts);
   }, [accounts]);
@@ -108,15 +132,15 @@ export default function HomePage() {
       if (syncError) {
         notify("error", {
           params: {
-            title: "Sync error",
+            title: t("syncLogic.Sync failed"),
             description: syncError,
           },
         });
       } else {
         notify("success", {
           params: {
-            title: "Sync success",
-            description: "All your accounts are up to date.",
+            title: t("syncLogic.Sync success"),
+            description: t("syncLogic.All your accounts are up to date."),
           },
         });
       }

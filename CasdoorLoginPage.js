@@ -28,6 +28,7 @@ import {useTranslation} from "react-i18next";
 import {useLanguageSync} from "./useLanguageSync";
 import {useEditAccount} from "./useAccountStore";
 import * as api from "./api";
+import {startWebLogin} from "./webLogin";
 
 let sdk = null;
 
@@ -84,6 +85,15 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
   };
 
   const handleLogin = (method) => {
+    // the WebView can't run on the web, so the whole page goes to Casdoor instead
+    if (Platform.OS === "web" && method !== "scan") {
+      const config = method === "demo" ? DefaultCasdoorSdkConfig : getCasdoorConfig();
+      startWebLogin(config).catch((error) => {
+        notify("error", {params: {title: t("common.error"), description: error.message}});
+      });
+      return;
+    }
+
     const actions = {
       manual: () => {
         getCasdoorSignInUrl();

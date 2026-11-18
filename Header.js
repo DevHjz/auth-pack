@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   rightContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: width * 0.04,
+    paddingRight: Math.min(24, width * 0.04),
   },
   titleWrapper: {
     alignItems: "flex-start",
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     alignItems: "baseline",
   },
   titleTextCasdoor: {
-    fontSize: Math.max(24, width * 0.05),
+    fontSize: Math.min(28, Math.max(24, width * 0.05)),
     fontWeight: "bold",
     color: "#212121",
     fontFamily: "Lato_700Bold",
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   buttonText: {
-    fontSize: Math.max(14, width * 0.042),
+    fontSize: Math.min(18, Math.max(14, width * 0.042)),
     fontWeight: "600",
     marginLeft: 8,
     color: "#424242",

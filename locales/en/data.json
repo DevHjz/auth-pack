@@ -93,7 +93,9 @@
   },
   "syncLogic": {
     "Sync failed": "Sync failed",
-    "Access token has expired, please login again": "Access token has expired, please login again"
+    "Access token has expired, please login again": "Access token has expired, please login again",
+    "Sync success": "Sync success",
+    "All your accounts are up to date.": "All your accounts are up to date."
   },
   "itemDetail": {
     "token": "Token",
