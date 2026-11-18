@@ -22,10 +22,11 @@ const LoginMethodSelector = ({onSelectMethod}) => {
     const options = [
       i18next.t("loginMethod.Manual Server Setup"),
       i18next.t("loginMethod.Login Using QR Code"),
-      i18next.t("loginMethod.Try Casdoor Demo Site"),
+      i18next.t("loginMethod.Huangfa Technology Tenant"),
+      i18next.t("loginMethod.Public Authentication Service"),
       i18next.t("common.cancel"),
     ];
-    const cancelButtonIndex = 3;
+    const cancelButtonIndex = 4;
 
     showActionSheetWithOptions(
       {
@@ -50,6 +51,9 @@ const LoginMethodSelector = ({onSelectMethod}) => {
       break;
     case 2:
       onSelectMethod("demo");
+      break;
+    case 3:
+      onSelectMethod("public");
       break;
     default:
       // Cancel was pressed

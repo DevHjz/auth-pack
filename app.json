@@ -2,7 +2,7 @@
   "expo": {
     "name": "云验令牌",
     "slug": "hcv-authenticator",
-    "version": "1.28.0-Cloud",
+    "version": "1.28.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,7 +25,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.devhjz.sso",
-      "buildNumber": "1.28.0-Cloud"
+      "buildNumber": "1.28.0"
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +33,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.devhjz.sso",
-      "versionCode": 520012801
+      "versionCode": 520012802
     },
     "web": {
       "favicon": "./assets/favicon.png"

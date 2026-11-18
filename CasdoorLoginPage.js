@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {WebView} from "react-native-webview";
 import {Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity} from "react-native";
 import {Portal} from "react-native-paper";
@@ -24,6 +24,7 @@ import EnterCasdoorSdkConfig from "./EnterCasdoorSdkConfig";
 import ScanQRCodeForLogin from "./ScanLogin";
 import useStore from "./useStorage";
 import DefaultCasdoorSdkConfig from "./DefaultCasdoorSdkConfig";
+import PublicCasdoorSdkConfig from "./PublicCasdoorSdkConfig";
 import {useTranslation} from "react-i18next";
 import {useLanguageSync} from "./useLanguageSync";
 import {useEditAccount} from "./useAccountStore";
@@ -32,17 +33,21 @@ import {startWebLogin} from "./webLogin";
 
 let sdk = null;
 
+const isPresetMethod = (method) => method === "demo" || method === "public";
+
 function CasdoorLoginPage({onWebviewClose, initialMethod}) {
   CasdoorLoginPage.propTypes = {
     onWebviewClose: PropTypes.func.isRequired,
-    initialMethod: PropTypes.oneOf(["manual", "scan", "demo"]).isRequired,
+    initialMethod: PropTypes.oneOf(["manual", "scan", "demo", "public"]).isRequired,
   };
 
   useLanguageSync();
   const {notify} = useNotifications();
   const {t} = useTranslation();
   const [casdoorLoginURL, setCasdoorLoginURL] = useState("");
-  const [currentView, setCurrentView] = useState(initialMethod === "scan" ? "scanner" : "config");
+  const [currentView, setCurrentView] = useState(
+    initialMethod === "scan" ? "scanner" : isPresetMethod(initialMethod) ? "webview" : "config"
+  );
 
   const {
     serverUrl,
@@ -52,7 +57,6 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
     organizationName,
     token,
     getCasdoorConfig,
-    setCasdoorConfig,
     setServerUrl,
     setClientId,
     setAppName,
@@ -61,15 +65,10 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
     setToken,
   } = useStore();
 
-  useEffect(() => {
-    if (initialMethod === "demo") {
-      setCasdoorConfig(DefaultCasdoorSdkConfig);
-    }
-  }, [initialMethod, setCasdoorConfig]);
-
   const initSdk = () => {
     const configs = {
       demo: DefaultCasdoorSdkConfig,
+      public: PublicCasdoorSdkConfig,
       scan: getCasdoorConfig(),
       manual: serverUrl && clientId && redirectPath && appName && organizationName ? getCasdoorConfig() : null,
     };
@@ -87,7 +86,8 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
   const handleLogin = (method) => {
     // the WebView can't run on the web, so the whole page goes to Casdoor instead
     if (Platform.OS === "web" && method !== "scan") {
-      const config = method === "demo" ? DefaultCasdoorSdkConfig : getCasdoorConfig();
+      const configs = {demo: DefaultCasdoorSdkConfig, public: PublicCasdoorSdkConfig};
+      const config = configs[method] || getCasdoorConfig();
       startWebLogin(config).catch((error) => {
         notify("error", {params: {title: t("common.error"), description: error.message}});
       });
@@ -103,11 +103,23 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
         getCasdoorSignInUrl();
         setCurrentView("webview");
       },
+      public: () => {
+        getCasdoorSignInUrl();
+        setCurrentView("webview");
+      },
       scan: () => setCurrentView("scanner"),
     };
 
     actions[method]?.();
   };
+
+  const presetLoginStarted = useRef(false);
+  useEffect(() => {
+    if (isPresetMethod(initialMethod) && !presetLoginStarted.current) {
+      presetLoginStarted.current = true;
+      handleLogin(initialMethod);
+    }
+  }, [initialMethod, handleLogin]);
 
   const onNavigationStateChange = async(navState) => {
     if (navState.url.startsWith(redirectPath)) {
@@ -153,6 +165,14 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
     }
   };
 
+  const handleLoginBack = () => {
+    if (isPresetMethod(initialMethod)) {
+      onWebviewClose();
+    } else {
+      setCurrentView("config");
+    }
+  };
+
   const renderContent = () => {
     const views = {
       config: (
@@ -177,8 +197,10 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
       ),
       webview: casdoorLoginURL && !token && (
         <SafeAreaView style={styles.safeArea}>
-          <TouchableOpacity style={styles.backButton} onPress={() => setCurrentView("config")}>
-            <Text style={styles.backButtonText}>{t("casdoorLoginPage.Back to Config")}</Text>
+          <TouchableOpacity style={styles.backButton} onPress={handleLoginBack}>
+            <Text style={styles.backButtonText}>
+              {isPresetMethod(initialMethod) ? t("common.cancel") : t("casdoorLoginPage.Back to Config")}
+            </Text>
           </TouchableOpacity>
           <WebView
             source={{uri: casdoorLoginURL}}
@@ -190,7 +212,7 @@ function CasdoorLoginPage({onWebviewClose, initialMethod}) {
                   description: nativeEvent.description,
                 },
               });
-              setCurrentView("config");
+              handleLoginBack();
             }}
             style={styles.webview}
             mixedContentMode="always"

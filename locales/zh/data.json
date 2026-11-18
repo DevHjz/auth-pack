@@ -57,7 +57,8 @@
     "Select Login Method": "选择登录方式",
     "Manual Server Setup": "手动服务器设置",
     "Login Using QR Code": "使用二维码登录",
-    "Try Casdoor Demo Site": "使用云端验证服务"
+    "Huangfa Technology Tenant": "黄发科技租户",
+    "Public Authentication Service": "公共认证服务"
   },
   "msAuthImport": {
     "Error creating directory": "创建目录错误",

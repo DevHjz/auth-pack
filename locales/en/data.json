@@ -57,7 +57,8 @@
     "Select Login Method": "Select Login Method",
     "Manual Server Setup": "Manual Server Setup",
     "Login Using QR Code": "Login Using QR Code",
-    "Try Casdoor Demo Site": "Use Cloud Verify Server"
+    "Huangfa Technology Tenant": "Huangfa Technology Tenant",
+    "Public Authentication Service": "Public Authentication Service"
   },
   "msAuthImport": {
     "Error creating directory": "Error creating directory",
